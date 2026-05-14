@@ -812,8 +812,8 @@ async function delPayment(type,id){
   renderMain();
 }
 
-// LEDGER
-
+// BACKUP
+function rBackup(){
   const last=localStorage.getItem('ivault_last_backup')||'Never';
   const bEmail=localStorage.getItem('ivault_backup_email')||'';
   return`
