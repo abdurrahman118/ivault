@@ -267,6 +267,7 @@ const NAV=[
   {id:'expenses',icon:'💸',label:'Expenses'},
   {id:'repairs',icon:'🔧',label:'Repairs'},
   {id:'reports',icon:'📊',label:'Reports'},
+  {id:'ledger',icon:'📒',label:'Ledger'},
   {id:'backup',icon:'☁️',label:'Backup'},
   {id:'settings',icon:'⚙️',label:'Settings'},
 ];
@@ -275,8 +276,8 @@ function avatarColor(name){let h=0;for(let c of(name||''))h=c.charCodeAt(0)+((h<
 function initials(name){return(name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
 
 let CU=null,CS=null,THEME='dark';
-let ST={tab:'dashboard',peopleTab:'customers',search:'',editId:null,form:{},billDetail:null,settingsTab:'company'};
-let D={devices:[],stockPurchases:[],inventory:[],customers:[],suppliers:[],bills:[],expenses:[],repairs:[],settings:null};
+let ST={tab:'dashboard',peopleTab:'customers',ledgerTab:'customers',search:'',editId:null,form:{},billDetail:null,settingsTab:'company'};
+let D={devices:[],stockPurchases:[],inventory:[],customers:[],suppliers:[],bills:[],expenses:[],repairs:[],customerPayments:[],supplierPayments:[],settings:null};
 let stockUnits=[],billItems=[];
 
 function toggleSidebar(){
@@ -364,16 +365,19 @@ async function startApp(){
 
 async function loadAll(){
   const q=`user_id=eq.${CU.id}&order=created_at.desc`;
-  const [a,b,c,d,e,f,g,h,s]=await Promise.all([
+  const [a,b,c,d,e,f,g,h,s,cp,sp]=await Promise.all([
     api('GET','devices',null,q),api('GET','stock_purchases',null,q),
     api('GET','inventory',null,q),api('GET','customers',null,q),
     api('GET','suppliers',null,q),api('GET','bills',null,q),
     api('GET','expenses',null,q),api('GET','repairs',null,q),
-    api('GET','settings',null,`user_id=eq.${CU.id}`)
+    api('GET','settings',null,`user_id=eq.${CU.id}`),
+    api('GET','customer_payments',null,q),
+    api('GET','supplier_payments',null,q)
   ]);
   D.devices=a||[];D.stockPurchases=b||[];D.inventory=c||[];
   D.customers=d||[];D.suppliers=e||[];D.bills=f||[];
   D.expenses=g||[];D.repairs=h||[];
+  D.customerPayments=cp||[];D.supplierPayments=sp||[];
   D.settings=s&&s[0]?s[0]:{company_name:'iVault',address:'',phone:'',email:'',bank1_name:'HBL',bank1_acc:'',bank1_title:'',bank2_name:'Meezan Bank',bank2_acc:'',bank2_title:''};
 }
 
@@ -387,7 +391,7 @@ function renderNav(){
 }
 function setTab(t){ST.tab=t;ST.search='';renderNav();renderMain();document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open');}
 function renderMain(){
-  const pages={dashboard:rDash,devices:rDevices,stock:rStock,inventory:rInventory,people:rPeople,billing:rBilling,expenses:rExpenses,repairs:rRepairs,reports:rReports,backup:rBackup,settings:rSettings};
+  const pages={dashboard:rDash,devices:rDevices,stock:rStock,inventory:rInventory,people:rPeople,billing:rBilling,expenses:rExpenses,repairs:rRepairs,reports:rReports,ledger:rLedger,backup:rBackup,settings:rSettings};
   document.getElementById('main').innerHTML=(pages[ST.tab]||rDash)();
 }
 
@@ -399,8 +403,19 @@ function rDash(){
   const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const net=prof-exp;
-  const activeRep=D.repairs.filter(r=>r.status!=='Delivered');
+  // ledger totals
+  const totalCustOwed=D.customers.reduce((a,c)=>{
+    const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((x,b)=>x+Number(b.total),0);
+    const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((x,p)=>x+Number(p.amount),0);
+    return a+Math.max(0,billed-paid);
+  },0);
+  const totalSuppOwed=D.suppliers.reduce((a,s)=>{
+    const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((x,p)=>x+Number(p.total_cost),0);
+    const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((x,p)=>x+Number(p.amount),0);
+    return a+Math.max(0,owed-paid);
+  },0);
   const low=D.devices.filter(d=>D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length<=2);
+  const activeRep=D.repairs.filter(r=>r.status!=='Delivered');
   return`
   <div class="page-header"><h1>Dashboard</h1><div style="font-size:13px;color:var(--text3);font-weight:500">${D.settings?.company_name||'iVault'}</div></div>
   <div class="page-content">
@@ -410,17 +425,26 @@ function rDash(){
     <div class="metric-card"><div class="mc-label">Expenses</div><div class="mc-val red">${fmtK(exp)}</div></div>
     <div class="metric-card"><div class="mc-label">Net Profit</div><div class="mc-val ${net>=0?'amber':'red'}">${fmtK(net)}</div></div>
   </div>
-  <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="metric-grid">
     <div class="metric-card"><div class="mc-label">Units Sold</div><div class="mc-val orange">${sold}</div></div>
     <div class="metric-card"><div class="mc-label">Gross Profit</div><div class="mc-val green">${fmtK(prof)}</div></div>
-    <div class="metric-card"><div class="mc-label">Active Repairs</div><div class="mc-val amber">${activeRep.length}</div></div>
+    <div class="metric-card" style="border-color:rgba(34,197,94,0.3);cursor:pointer" onclick="setTab('ledger')"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmtK(totalCustOwed)}</div></div>
+    <div class="metric-card" style="border-color:rgba(239,68,68,0.3);cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="mc-label">You Owe Suppliers</div><div class="mc-val red">${fmtK(totalSuppOwed)}</div></div>
   </div>
   <div class="two-col">
     <div class="card"><div class="card-title">⚠️ Low Stock</div>
       ${low.length===0?'<div class="empty">All devices well stocked ✓</div>':low.map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}
     </div>
     <div class="card"><div class="card-title">🔧 Active Repairs</div>
-      ${activeRep.length===0?'<div class="empty">No active repairs</div>':activeRep.map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>`).join('')}
+      ${activeRep.length===0?'<div class="empty">No active repairs</div>':activeRep.slice(0,5).map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>`).join('')}
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="card" style="cursor:pointer" onclick="setTab('ledger')"><div class="card-title">📥 Customer Balances</div>
+      ${D.customers.length===0?'<div class="empty">No customers yet</div>':D.customers.slice(0,5).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+    </div>
+    <div class="card" style="cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="card-title">📤 Supplier Balances</div>
+      ${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':D.suppliers.slice(0,5).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
     </div>
   </div>
   </div>`;
@@ -612,8 +636,184 @@ function rReports(){
   </div>`;
 }
 
-// BACKUP
-function rBackup(){
+// LEDGER
+function rLedger(){
+  const isC=ST.ledgerTab!=='suppliers';
+  const list=isC?D.customers:D.suppliers;
+  const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
+
+  // compute balances
+  function custBalance(c){
+    const totalBilled=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
+    const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);
+    return{totalBilled,totalPaid,balance:totalBilled-totalPaid};
+  }
+  function suppBalance(s){
+    const totalOwed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);
+    const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);
+    return{totalOwed,totalPaid,balance:totalOwed-totalPaid};
+  }
+
+  // overall totals
+  const totalCustBalance=D.customers.reduce((a,c)=>{const b=custBalance(c);return a+b.balance;},0);
+  const totalSuppBalance=D.suppliers.reduce((a,s)=>{const b=suppBalance(s);return a+b.balance;},0);
+
+  return`
+  <div class="page-header"><h1>Ledger</h1></div>
+  <div class="page-content">
+  <div class="metric-grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="metric-card" style="border-color:rgba(34,197,94,0.3)"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmt(totalCustBalance)}</div></div>
+    <div class="metric-card" style="border-color:rgba(239,68,68,0.3)"><div class="mc-label">You Owe Suppliers</div><div class="mc-val red">${fmt(totalSuppBalance)}</div></div>
+  </div>
+  <div class="tab-row">
+    <button class="tab-btn${isC?' active':''}" onclick="ST.ledgerTab='customers';ST.search='';renderMain()">📥 Customer Balances</button>
+    <button class="tab-btn${!isC?' active':''}" onclick="ST.ledgerTab='suppliers';ST.search='';renderMain()">📤 Supplier Balances</button>
+  </div>
+  <input class="plain-search" placeholder="Search ${isC?'customers':'suppliers'}..." value="${ST.search}" oninput="ST.search=this.value;renderMain()">
+  ${filtered.length===0?`<div class="empty">No ${isC?'customers':'suppliers'} yet. Add them in People tab first.</div>`:
+    filtered.map(x=>{
+      const bal=isC?custBalance(x):suppBalance(x);
+      const totalAmt=isC?bal.totalBilled:bal.totalOwed;
+      const balColor=bal.balance>0?'var(--red)':bal.balance<0?'var(--green)':'var(--text3)';
+      const balLabel=isC?(bal.balance>0?'Outstanding':'Overpaid'):(bal.balance>0?'You Owe':'Overpaid');
+      return`<div class="item-row">
+        <div class="mi">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="person-avatar" style="background:${avatarColor(x.name)};width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${initials(x.name)}</div>
+            <div>
+              <div class="iname">${x.name}</div>
+              <div class="isub">${x.phone||''} ${x.city?'· '+x.city:''}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)">
+            <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:14px;font-weight:800;color:var(--text);margin-top:2px">${fmt(totalAmt)}</div></div>
+            <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Paid</div><div style="font-size:14px;font-weight:800;color:var(--green);margin-top:2px">${fmt(bal.totalPaid)}</div></div>
+            <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${balLabel}</div><div style="font-size:14px;font-weight:800;margin-top:2px;color:${balColor}">${fmt(Math.abs(bal.balance))}</div></div>
+          </div>
+          <div class="iacts">
+            <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" onclick="openPaymentModal(${isC?1:2},${x.id},'${(x.name||'').replace(/'/g,"\\'")}')">+ Record Payment</button>
+            <button class="iab" onclick="showLedgerDetail(${isC?1:2},${x.id},'${(x.name||'').replace(/'/g,"\\'")}')">📋 View History</button>
+          </div>
+        </div>
+        <div style="text-align:right;min-width:100px">
+          <span class="badge ${bal.balance<=0?'badge-green':bal.balance>0&&bal.balance<totalAmt*0.5?'badge-amber':'badge-red'}">${bal.balance<=0?'✓ Cleared':bal.balance===totalAmt?'Unpaid':'Partial'}</span>
+          ${bal.balance>0?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Due: ${fmt(bal.balance)}</div>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function openPaymentModal(type,id,name){
+  // type 1=customer, type 2=supplier
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  const isC=type===1;
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px">
+    <h3>${isC?'📥':'📤'} Record Payment — ${name}</h3>
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500">
+      ${isC?'💡 Customer paying you — record money received':'💡 You paying supplier — record money sent'}
+    </div>
+    <div class="mfield"><label>DATE</label><input type="date" id="pay_date" value="${today()}"></div>
+    <div class="mfield"><label>AMOUNT (RS.) *</label><input type="number" id="pay_amount" placeholder="Enter payment amount..."></div>
+    <div class="mfield"><label>PAYMENT METHOD</label><select id="pay_method">
+      <option>Cash</option><option>Bank Transfer</option><option>HBL</option><option>Meezan Bank</option><option>JazzCash</option><option>Easypaisa</option><option>Cheque</option>
+    </select></div>
+    <div class="mfield"><label>NOTE (OPTIONAL)</label><input id="pay_note" placeholder="e.g. Partial payment, Invoice INV-001..."></div>
+    <div class="mbtns">
+      <button class="bsave" onclick="savePayment(${type},${id},'${name.replace(/'/g,"\\'")}')">✓ Save Payment</button>
+      <button class="bcancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div></div>`;
+  document.body.appendChild(div);
+}
+
+async function savePayment(type,id,name){
+  const date=document.getElementById('pay_date')?.value;
+  const amount=Number(document.getElementById('pay_amount')?.value||0);
+  const method=document.getElementById('pay_method')?.value;
+  const note=document.getElementById('pay_note')?.value||'';
+  if(!amount||amount<=0)return alert('Please enter a valid amount');
+  const isC=type===1;
+  const table=isC?'customer_payments':'supplier_payments';
+  const data={
+    user_id:CU.id,
+    date,amount,payment_method:method,note,
+    ...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})
+  };
+  const res=await api('POST',table,data);
+  if(!res)return alert('Save failed. Please try again.');
+  closeModal();await loadAll();renderMain();
+}
+
+function showLedgerDetail(type,id,name){
+  const isC=type===1;
+  const bills=isC?D.bills.filter(b=>b.customer_name===name):[];
+  const purchases=!isC?D.stockPurchases.filter(p=>p.supplier_name===name):[];
+  const payments=isC?D.customerPayments.filter(p=>p.customer_id==id):D.supplierPayments.filter(p=>p.supplier_id==id);
+
+  // build unified timeline sorted by date
+  const timeline=[];
+  if(isC){
+    bills.forEach(b=>timeline.push({date:b.date,type:'invoice',label:`Invoice ${b.id}`,amount:Number(b.total),debit:Number(b.total),credit:0}));
+  } else {
+    purchases.forEach(p=>timeline.push({date:p.date,type:'purchase',label:`Purchase ${p.purchase_id||p.id}`,amount:Number(p.total_cost),debit:Number(p.total_cost),credit:0}));
+  }
+  payments.forEach(p=>timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,amount:Number(p.amount),debit:0,credit:Number(p.amount),payId:p.id}));
+  timeline.sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  // running balance
+  let running=0;
+  const rows=timeline.map(t=>{
+    running+=t.debit-t.credit;
+    return{...t,running};
+  });
+
+  const totalDebit=timeline.reduce((a,t)=>a+t.debit,0);
+  const totalCredit=timeline.reduce((a,t)=>a+t.credit,0);
+  const balance=totalDebit-totalCredit;
+
+  const div=document.createElement('div');div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:580px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">${isC?'📥':'📤'} Ledger — ${name}</h3>
+      <button class="btn-orange btn-sm" onclick="openPaymentModal(${type},${id},'${name.replace(/'/g,"\\'")}');this.closest('.modal-ov').remove()">+ Add Payment</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:16px;font-weight:800;color:var(--text);margin-top:3px">${fmt(totalDebit)}</div></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Paid</div><div style="font-size:16px;font-weight:800;color:var(--green);margin-top:3px">${fmt(totalCredit)}</div></div>
+      <div style="background:${balance>0?'var(--red-bg)':'var(--green-bg)'};border-radius:8px;padding:10px;border:1px solid ${balance>0?'rgba(239,68,68,0.3)':'rgba(34,197,94,0.3)'}"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Balance</div><div style="font-size:16px;font-weight:800;color:${balance>0?'var(--red)':'var(--green)'};margin-top:3px">${fmt(Math.abs(balance))} ${balance>0?'Due':'✓'}</div></div>
+    </div>
+    ${rows.length===0?'<div class="empty">No transactions yet</div>':`
+    <div style="overflow-x:auto;max-height:360px;overflow-y:auto"><table class="tbl">
+      <thead style="position:sticky;top:0;background:var(--bg2)"><tr><th>Date</th><th>Description</th><th>${isC?'Invoice':'Purchase'}</th><th>Payment</th><th>Balance</th><th></th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td style="color:var(--text3);white-space:nowrap">${r.date}</td>
+        <td style="font-size:12px">${r.label}</td>
+        <td style="color:var(--red);font-weight:700">${r.debit>0?fmt(r.debit):'—'}</td>
+        <td style="color:var(--green);font-weight:700">${r.credit>0?fmt(r.credit):'—'}</td>
+        <td style="font-weight:800;color:${r.running>0?'var(--red)':'var(--green)'}">${fmt(Math.abs(r.running))}</td>
+        <td>${r.type==='payment'?`<button class="iab" style="color:var(--red)" onclick="delPayment(${type},'${r.payId}')">🗑</button>`:''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`}
+    <button class="bcancel" style="width:100%;margin-top:14px" onclick="this.closest('.modal-ov').remove()">Close</button>
+  </div>`;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
+async function delPayment(type,id){
+  if(!confirm('Delete this payment record?'))return;
+  const table=type===1?'customer_payments':'supplier_payments';
+  await api('DELETE',table,null,`id=eq.${id}`);
+  await loadAll();
+  // close and reopen detail — just reload main
+  document.querySelectorAll('.modal-ov').forEach(el=>el.remove());
+  renderMain();
+}
+
+// LEDGER
+
   const last=localStorage.getItem('ivault_last_backup')||'Never';
   const bEmail=localStorage.getItem('ivault_backup_email')||'';
   return`
