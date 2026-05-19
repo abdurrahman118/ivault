@@ -552,19 +552,29 @@ function rBilling(){
   <div class="page-content">
   ${D.bills.length===0?'<div class="empty">No invoices yet</div>':`
   <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Total</th><th>Profit</th><th>Actions</th></tr></thead>
-    <tbody>${D.bills.map(b=>`<tr>
-      <td style="color:var(--orange);font-weight:800;cursor:pointer" onclick="showBillDetail('${b.id}')">${b.id}</td>
-      <td style="font-weight:600">${b.customer_name}</td>
-      <td style="color:var(--text3)">${b.date}</td>
-      <td style="color:var(--green);font-weight:800">${fmt(b.total)}</td>
-      <td style="color:var(--amber);font-weight:700">${fmt(b.profit)}</td>
-      <td><div style="display:flex;gap:5px">
-        <button class="iab" onclick="printBill('${b.id}')">🖨</button>
-        <button class="iab" onclick="waBill('${b.id}')">💬</button>
-        <button class="iab" style="color:var(--red)" onclick="delBill('${b.id}')">🗑</button>
-      </div></td>
-    </tr>`).join('')}</tbody>
+    <thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${D.bills.map(b=>{
+      const paid=D.customerPayments.filter(p=>p.customer_id==b.customer_id&&(p.note||'').includes(b.id)).reduce((a,p)=>a+Number(p.amount),0);
+      const bPaid=Number(b.amount_paid||0);
+      const totalPaid=Math.max(paid,bPaid);
+      const bal=Number(b.total)-totalPaid;
+      const status=bal<=0?'Cleared':totalPaid>0?'Partial':'Unpaid';
+      const statusColor=bal<=0?'badge-green':totalPaid>0?'badge-amber':'badge-red';
+      return`<tr>
+        <td style="color:var(--orange);font-weight:800;cursor:pointer" onclick="showBillDetail('${b.id}')">${b.id}</td>
+        <td style="font-weight:600">${b.customer_name}</td>
+        <td style="color:var(--text3)">${b.date}</td>
+        <td style="color:var(--green);font-weight:800">${fmt(b.total)}</td>
+        <td style="color:var(--green);font-weight:700">${fmt(totalPaid)}</td>
+        <td style="color:${bal>0?'var(--red)':'var(--green)'};font-weight:700">${bal>0?fmt(bal):'✓'}</td>
+        <td><span class="badge ${statusColor}">${status}</span></td>
+        <td><div style="display:flex;gap:5px">
+          <button class="iab" onclick="previewBill('${b.id}')">👁</button>
+          <button class="iab" onclick="waBill('${b.id}')">💬</button>
+          <button class="iab" style="color:var(--red)" onclick="delBill('${b.id}')">🗑</button>
+        </div></td>
+      </tr>`;}).join('')}
+    </tbody>
   </table></div></div>`}
   </div>`;
 }
@@ -641,8 +651,6 @@ function rLedger(){
   const isC=ST.ledgerTab!=='suppliers';
   const list=isC?D.customers:D.suppliers;
   const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
-
-  // compute balances
   function custBalance(c){
     const totalBilled=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
     const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);
@@ -653,13 +661,15 @@ function rLedger(){
     const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);
     return{totalOwed,totalPaid,balance:totalOwed-totalPaid};
   }
-
-  // overall totals
   const totalCustBalance=D.customers.reduce((a,c)=>{const b=custBalance(c);return a+b.balance;},0);
   const totalSuppBalance=D.suppliers.reduce((a,s)=>{const b=suppBalance(s);return a+b.balance;},0);
-
   return`
-  <div class="page-header"><h1>Ledger</h1></div>
+  <div class="page-header"><h1>Ledger</h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-green btn-sm" onclick="printCombinedLedger(1)">🖨 All Customer Report</button>
+      <button class="btn-red btn-sm" onclick="printCombinedLedger(2)">🖨 All Supplier Report</button>
+    </div>
+  </div>
   <div class="page-content">
   <div class="metric-grid" style="grid-template-columns:repeat(2,1fr)">
     <div class="metric-card" style="border-color:rgba(34,197,94,0.3)"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmt(totalCustBalance)}</div></div>
@@ -680,10 +690,7 @@ function rLedger(){
         <div class="mi">
           <div style="display:flex;align-items:center;gap:10px">
             <div class="person-avatar" style="background:${avatarColor(x.name)};width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${initials(x.name)}</div>
-            <div>
-              <div class="iname">${x.name}</div>
-              <div class="isub">${x.phone||''} ${x.city?'· '+x.city:''}</div>
-            </div>
+            <div><div class="iname">${x.name}</div><div class="isub">${x.phone||''} ${x.city?'· '+x.city:''}</div></div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)">
             <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:14px;font-weight:800;color:var(--text);margin-top:2px">${fmt(totalAmt)}</div></div>
@@ -693,6 +700,7 @@ function rLedger(){
           <div class="iacts">
             <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" onclick="openPaymentModal(${isC?1:2},${x.id},'${(x.name||'').replace(/'/g,"\\'")}')">+ Record Payment</button>
             <button class="iab" onclick="showLedgerDetail(${isC?1:2},${x.id},'${(x.name||'').replace(/'/g,"\\'")}')">📋 View History</button>
+            <button class="iab" onclick="printIndividualLedger(${isC?1:2},${x.id},'${(x.name||'').replace(/'/g,"\\'")}')">🖨 Print Report</button>
           </div>
         </div>
         <div style="text-align:right;min-width:100px">
@@ -705,7 +713,6 @@ function rLedger(){
 }
 
 function openPaymentModal(type,id,name){
-  // type 1=customer, type 2=supplier
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
   const isC=type===1;
@@ -736,48 +743,40 @@ async function savePayment(type,id,name){
   if(!amount||amount<=0)return alert('Please enter a valid amount');
   const isC=type===1;
   const table=isC?'customer_payments':'supplier_payments';
-  const data={
-    user_id:CU.id,
-    date,amount,payment_method:method,note,
-    ...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})
-  };
+  const data={user_id:CU.id,date,amount,payment_method:method,note,...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})};
   const res=await api('POST',table,data);
   if(!res)return alert('Save failed. Please try again.');
   closeModal();await loadAll();renderMain();
 }
 
-function showLedgerDetail(type,id,name){
+function buildLedgerTimeline(type,id,name){
   const isC=type===1;
   const bills=isC?D.bills.filter(b=>b.customer_name===name):[];
   const purchases=!isC?D.stockPurchases.filter(p=>p.supplier_name===name):[];
   const payments=isC?D.customerPayments.filter(p=>p.customer_id==id):D.supplierPayments.filter(p=>p.supplier_id==id);
-
-  // build unified timeline sorted by date
   const timeline=[];
-  if(isC){
-    bills.forEach(b=>timeline.push({date:b.date,type:'invoice',label:`Invoice ${b.id}`,amount:Number(b.total),debit:Number(b.total),credit:0}));
-  } else {
-    purchases.forEach(p=>timeline.push({date:p.date,type:'purchase',label:`Purchase ${p.purchase_id||p.id}`,amount:Number(p.total_cost),debit:Number(p.total_cost),credit:0}));
-  }
-  payments.forEach(p=>timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,amount:Number(p.amount),debit:0,credit:Number(p.amount),payId:p.id}));
+  if(isC) bills.forEach(b=>timeline.push({date:b.date,type:'invoice',label:`Invoice ${b.id}`,debit:Number(b.total),credit:0}));
+  else purchases.forEach(p=>timeline.push({date:p.date,type:'purchase',label:`Purchase ${p.purchase_id||p.id}`,debit:Number(p.total_cost),credit:0}));
+  payments.forEach(p=>timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,debit:0,credit:Number(p.amount),payId:p.id}));
   timeline.sort((a,b)=>new Date(a.date)-new Date(b.date));
-
-  // running balance
   let running=0;
-  const rows=timeline.map(t=>{
-    running+=t.debit-t.credit;
-    return{...t,running};
-  });
+  return timeline.map(t=>{running+=t.debit-t.credit;return{...t,running};});
+}
 
-  const totalDebit=timeline.reduce((a,t)=>a+t.debit,0);
-  const totalCredit=timeline.reduce((a,t)=>a+t.credit,0);
+function showLedgerDetail(type,id,name){
+  const isC=type===1;
+  const rows=buildLedgerTimeline(type,id,name);
+  const totalDebit=rows.reduce((a,r)=>a+r.debit,0);
+  const totalCredit=rows.reduce((a,r)=>a+r.credit,0);
   const balance=totalDebit-totalCredit;
-
   const div=document.createElement('div');div.className='modal-ov';
-  div.innerHTML=`<div class="modal" style="max-width:580px">
+  div.innerHTML=`<div class="modal" style="max-width:600px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <h3 style="margin:0">${isC?'📥':'📤'} Ledger — ${name}</h3>
-      <button class="btn-orange btn-sm" onclick="openPaymentModal(${type},${id},'${name.replace(/'/g,"\\'")}');this.closest('.modal-ov').remove()">+ Add Payment</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-orange btn-sm" onclick="openPaymentModal(${type},${id},'${name.replace(/'/g,"\\'")}');this.closest('.modal-ov').remove()">+ Payment</button>
+        <button class="btn-green btn-sm" onclick="printIndividualLedger(${type},${id},'${name.replace(/'/g,"\\'")}')">🖨 Print</button>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
       <div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:16px;font-weight:800;color:var(--text);margin-top:3px">${fmt(totalDebit)}</div></div>
@@ -785,10 +784,10 @@ function showLedgerDetail(type,id,name){
       <div style="background:${balance>0?'var(--red-bg)':'var(--green-bg)'};border-radius:8px;padding:10px;border:1px solid ${balance>0?'rgba(239,68,68,0.3)':'rgba(34,197,94,0.3)'}"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Balance</div><div style="font-size:16px;font-weight:800;color:${balance>0?'var(--red)':'var(--green)'};margin-top:3px">${fmt(Math.abs(balance))} ${balance>0?'Due':'✓'}</div></div>
     </div>
     ${rows.length===0?'<div class="empty">No transactions yet</div>':`
-    <div style="overflow-x:auto;max-height:360px;overflow-y:auto"><table class="tbl">
-      <thead style="position:sticky;top:0;background:var(--bg2)"><tr><th>Date</th><th>Description</th><th>${isC?'Invoice':'Purchase'}</th><th>Payment</th><th>Balance</th><th></th></tr></thead>
+    <div style="overflow-x:auto;max-height:380px;overflow-y:auto"><table class="tbl">
+      <thead style="position:sticky;top:0;background:var(--bg2)"><tr><th>Date</th><th>Description</th><th>${isC?'Invoice Amt':'Purchase Amt'}</th><th>Payment</th><th>Balance</th><th></th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
-        <td style="color:var(--text3);white-space:nowrap">${r.date}</td>
+        <td style="color:var(--text3);white-space:nowrap;font-size:12px">${r.date}</td>
         <td style="font-size:12px">${r.label}</td>
         <td style="color:var(--red);font-weight:700">${r.debit>0?fmt(r.debit):'—'}</td>
         <td style="color:var(--green);font-weight:700">${r.credit>0?fmt(r.credit):'—'}</td>
@@ -802,12 +801,95 @@ function showLedgerDetail(type,id,name){
   document.body.appendChild(div);
 }
 
+function printIndividualLedger(type,id,name){
+  const isC=type===1;
+  const s=D.settings||{};
+  const rows=buildLedgerTimeline(type,id,name);
+  const totalDebit=rows.reduce((a,r)=>a+r.debit,0);
+  const totalCredit=rows.reduce((a,r)=>a+r.credit,0);
+  const balance=totalDebit-totalCredit;
+  const person=isC?D.customers.find(c=>c.id==id):D.suppliers.find(s=>s.id==id);
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Ledger — ${name}</title><style>
+  @page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}
+  h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px;color:#333}
+  .hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}
+  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .mc{background:#f9f9f9;border-radius:6px;padding:10px}.mc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.mc .v{font-size:16px;font-weight:800;margin-top:3px}
+  table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f0}
+  .green{color:#16a34a}.red{color:#dc2626}.footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+  </style></head><body>
+  <div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div>
+  <h2>${isC?'Customer':'Supplier'} Ledger Report — ${name}</h2>
+  <div style="font-size:12px;margin-bottom:12px">${person?.phone?'Phone: '+person.phone+' · ':''} ${person?.city?'City: '+person.city:''} · Generated: ${new Date().toLocaleDateString()}</div>
+  <div class="meta">
+    <div class="mc"><div class="l">${isC?'Total Billed':'Total Purchased'}</div><div class="v red">Rs. ${totalDebit.toLocaleString()}</div></div>
+    <div class="mc"><div class="l">Total Paid</div><div class="v green">Rs. ${totalCredit.toLocaleString()}</div></div>
+    <div class="mc"><div class="l">Balance</div><div class="v" style="color:${balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(balance).toLocaleString()} ${balance>0?'Due':'✓ Cleared'}</div></div>
+  </div>
+  <h2>Transaction History</h2>
+  <table><thead><tr><th>Date</th><th>Description</th><th>${isC?'Invoice':'Purchase'}</th><th>Payment</th><th>Running Balance</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr><td>${r.date}</td><td>${r.label}</td><td class="red">${r.debit>0?'Rs. '+r.debit.toLocaleString():'—'}</td><td class="green">${r.credit>0?'Rs. '+r.credit.toLocaleString():'—'}</td><td style="font-weight:700;color:${r.running>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.running).toLocaleString()}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div>
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
+  w.document.close();
+}
+
+function printCombinedLedger(type){
+  const isC=type===1;
+  const s=D.settings||{};
+  const list=isC?D.customers:D.suppliers;
+  const rows=list.map(x=>{
+    if(isC){
+      const billed=D.bills.filter(b=>b.customer_name===x.name).reduce((a,b)=>a+Number(b.total),0);
+      const paid=D.customerPayments.filter(p=>p.customer_id==x.id).reduce((a,p)=>a+Number(p.amount),0);
+      return{name:x.name,phone:x.phone||'',city:x.city||'',billed,paid,balance:billed-paid};
+    } else {
+      const owed=D.stockPurchases.filter(p=>p.supplier_name===x.name).reduce((a,p)=>a+Number(p.total_cost),0);
+      const paid=D.supplierPayments.filter(p=>p.supplier_id==x.id).reduce((a,p)=>a+Number(p.amount),0);
+      return{name:x.name,phone:x.phone||'',city:x.city||'',billed:owed,paid,balance:owed-paid};
+    }
+  });
+  const grandBilled=rows.reduce((a,r)=>a+r.billed,0);
+  const grandPaid=rows.reduce((a,r)=>a+r.paid,0);
+  const grandBal=rows.reduce((a,r)=>a+r.balance,0);
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>${isC?'Customer':'Supplier'} Ledger Report</title><style>
+  @page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}
+  h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px}
+  .hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .sc{background:#f9f9f9;border-radius:6px;padding:10px}.sc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.sc .v{font-size:18px;font-weight:800;margin-top:3px}
+  table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f0}tr:hover td{background:#fafafa}
+  .green{color:#16a34a}.red{color:#dc2626}.tfoot td{font-weight:800;background:#f5f5f5;border-top:2px solid #ddd}
+  .footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+  </style></head><body>
+  <div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div>
+  <h2>All ${isC?'Customer':'Supplier'} Ledger Report — ${new Date().toLocaleDateString()}</h2>
+  <div class="summary">
+    <div class="sc"><div class="l">Total ${isC?'Billed':'Purchased'}</div><div class="v red">Rs. ${grandBilled.toLocaleString()}</div></div>
+    <div class="sc"><div class="l">Total Received/Paid</div><div class="v green">Rs. ${grandPaid.toLocaleString()}</div></div>
+    <div class="sc"><div class="l">Total Outstanding</div><div class="v" style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</div></div>
+  </div>
+  <table><thead><tr><th>#</th><th>${isC?'Customer':'Supplier'} Name</th><th>Phone</th><th>City</th><th>${isC?'Total Billed':'Total Purchased'}</th><th>Total Paid</th><th>Balance</th><th>Status</th></tr></thead>
+  <tbody>
+  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td style="font-weight:700">${r.name}</td><td>${r.phone}</td><td>${r.city}</td><td class="red">Rs. ${r.billed.toLocaleString()}</td><td class="green">Rs. ${r.paid.toLocaleString()}</td><td style="font-weight:800;color:${r.balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.balance).toLocaleString()}</td><td>${r.balance<=0?'✓ Cleared':r.balance===r.billed?'Unpaid':'Partial'}</td></tr>`).join('')}
+  </tbody>
+  <tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td>Rs. ${grandBilled.toLocaleString()}</td><td>Rs. ${grandPaid.toLocaleString()}</td><td style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</td><td></td></tr></tfoot>
+  </table>
+  <div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div>
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
+  w.document.close();
+}
+
 async function delPayment(type,id){
   if(!confirm('Delete this payment record?'))return;
   const table=type===1?'customer_payments':'supplier_payments';
   await api('DELETE',table,null,`id=eq.${id}`);
   await loadAll();
-  // close and reopen detail — just reload main
   document.querySelectorAll('.modal-ov').forEach(el=>el.remove());
   renderMain();
 }
@@ -841,10 +923,15 @@ function rBackup(){
 // SETTINGS
 function rSettings(){
   const s=D.settings||{};const tab=ST.settingsTab||'company';
+  const terms=localStorage.getItem('ivault_terms')||'';
   return`
   <div class="page-header"><h1>Settings</h1></div>
   <div class="page-content">
-  <div class="tab-row"><button class="tab-btn${tab==='company'?' active':''}" onclick="ST.settingsTab='company';renderMain()">🏪 Company Info</button><button class="tab-btn${tab==='theme'?' active':''}" onclick="ST.settingsTab='theme';renderMain()">🎨 Theme</button></div>
+  <div class="tab-row">
+    <button class="tab-btn${tab==='company'?' active':''}" onclick="ST.settingsTab='company';renderMain()">🏪 Company Info</button>
+    <button class="tab-btn${tab==='terms'?' active':''}" onclick="ST.settingsTab='terms';renderMain()">📋 Bill Terms</button>
+    <button class="tab-btn${tab==='theme'?' active':''}" onclick="ST.settingsTab='theme';renderMain()">🎨 Theme</button>
+  </div>
   ${tab==='company'?`
   <div class="card"><div class="card-title">Company Information</div>
     <div class="tf">${[['Company Name','company_name'],['Address','address'],['Phone','phone'],['Email','email']].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>
@@ -852,6 +939,13 @@ function rSettings(){
   <div class="card"><div class="card-title">Bank Accounts</div>
     <div class="two-col">${[1,2].map(n=>`<div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)"><div style="font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px">BANK ${n}</div>${[['Bank Name',`bank${n}_name`],['Account No.',`bank${n}_acc`],['Account Title',`bank${n}_title`]].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>`).join('')}</div>
     <button class="btn-orange" style="margin-top:14px" onclick="saveSettings()">✓ Save Settings</button>
+  </div>`:tab==='terms'?`
+  <div class="card"><div class="card-title">📋 Terms & Conditions on Bills</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms will automatically appear at the bottom of every printed invoice. Write your return policy, payment terms, warranty policy etc.</p>
+    <div class="mfield"><label>TERMS & CONDITIONS</label><textarea id="s_terms" style="min-height:180px;line-height:1.7" placeholder="Example:&#10;• All sales are final. No returns after 24 hours.&#10;• Warranty void if device is physically damaged.&#10;• Payment must be cleared within 7 days.&#10;• We are not responsible for data loss during repair.">${terms}</textarea></div>
+    <button class="btn-orange" onclick="saveTerms()">✓ Save Terms</button>
+    <div id="termsSavedMsg" style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600"></div>
+    ${terms?`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-top:14px;border:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Preview on invoice:</div><div style="font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.7">${terms}</div></div>`:''}
   </div>`:`
   <div class="card"><div class="card-title">App Theme</div>
     <div class="theme-toggle">
@@ -861,6 +955,13 @@ function rSettings(){
     <p style="font-size:13px;color:var(--text2);font-weight:500">Theme preference is saved on this device.</p>
   </div>`}
   </div>`;
+}
+function saveTerms(){
+  const v=document.getElementById('s_terms')?.value||'';
+  localStorage.setItem('ivault_terms',v);
+  const el=document.getElementById('termsSavedMsg');
+  if(el)el.textContent='✓ Terms saved! Will appear on all future invoices.';
+  setTimeout(()=>renderMain(),1200);
 }
 
 // ---- STOCK PURCHASE MODAL ----
@@ -958,10 +1059,49 @@ function openBillModal(){
     <div id="billItemsWrap"></div>
     <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
     <div class="mfield"><label>EXTRA NOTES / DESCRIPTION (appears on invoice)</label><textarea id="bill_notes" placeholder="Warranty, return policy, accessories, any extra info..."></textarea></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div>
+      <div class="mfield"><label>PAYMENT STATUS</label>
+        <select id="bill_pay_status" onchange="togglePaymentFields()">
+          <option value="Unpaid">Unpaid — Full amount due</option>
+          <option value="Partial">Partial — Customer paid some now</option>
+          <option value="Cleared">Cleared — Fully paid</option>
+        </select>
+      </div>
+      <div id="partialPayFields" style="display:none">
+        <div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="bill_amount_paid" placeholder="How much paid now..." oninput="updateBillBalance()"></div>
+        <div id="billBalanceRow" style="display:none;background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px">
+          <div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE</div>
+          <div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">Rs. 0</div>
+        </div>
+      </div>
+    </div>
     <div class="mbtns"><button class="bsave" onclick="saveBill()">Create Invoice</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
   </div></div>`;
   document.body.appendChild(div);
   addBillItem();
+}
+
+function togglePaymentFields(){
+  const status=document.getElementById('bill_pay_status')?.value;
+  const partial=document.getElementById('partialPayFields');
+  if(partial) partial.style.display=status==='Partial'?'block':'none';
+  if(status==='Cleared'){
+    const inp=document.getElementById('bill_amount_paid');
+    // will be set to total on save
+  }
+}
+
+function updateBillBalance(){
+  // compute current total from bill items
+  billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=el.value;});
+  const total=billItems.reduce((a,i)=>a+Number(i.sale_price||0),0);
+  const paid=Number(document.getElementById('bill_amount_paid')?.value||0);
+  const bal=total-paid;
+  const row=document.getElementById('billBalanceRow');
+  const amt=document.getElementById('billBalanceAmt');
+  if(row) row.style.display=paid>0?'block':'none';
+  if(amt) amt.textContent=`Rs. ${Math.max(0,bal).toLocaleString()}`;
 }
 
 function addBillItem(){
@@ -1012,18 +1152,27 @@ async function saveBill(){
   const custName=document.getElementById('bill_cust_name')?.value?.trim();
   const custPhone=document.getElementById('bill_cust_phone')?.value?.trim()||'';
   const notes=document.getElementById('bill_notes')?.value?.trim()||'';
+  const payStatus=document.getElementById('bill_pay_status')?.value||'Unpaid';
   if(!custName)return alert('Customer name is required');
   billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=el.value;});
   const validItems=billItems.filter(item=>Number(item.sale_price)>0);
   if(validItems.length===0)return alert('Add at least 1 item with a sale price');
   const total=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
   const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
+  const amountPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('bill_amount_paid')?.value||0):0;
+  const balance=total-amountPaid;
   const num=String(D.bills.length+1).padStart(3,'0');
   const billId=`INV-${num}`;
-  const res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes});
+  const custId=document.getElementById('bill_cust_id')?.value||null;
+  const res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_id:custId,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amountPaid,balance});
   if(!res||!res[0])return alert('Failed to create invoice. Please try again.');
+  // Mark inventory units as sold
   for(const item of validItems){
     if(item.inv_id)await api('PATCH','inventory',{status:'Sold',sold_invoice:billId},`id=eq.${item.inv_id}`);
+  }
+  // Auto-add to customer ledger if partial or cleared payment
+  if(amountPaid>0&&custId){
+    await api('POST','customer_payments',{user_id:CU.id,customer_id:Number(custId),customer_name:custName,amount:amountPaid,payment_method:'Cash',note:`Payment on ${billId}`,date:today()});
   }
   closeModal();await loadAll();renderMain();
 }
@@ -1049,6 +1198,8 @@ function selectSuggest(inputId,hiddenId,label,value){
 function showBillDetail(id){
   const b=D.bills.find(x=>x.id===id);if(!b)return;
   const s=D.settings||{};const items=b.items||[];
+  const bal=Number(b.balance||0);const paid=Number(b.amount_paid||0);
+  const status=b.pay_status||'Unpaid';
   const div=document.createElement('div');div.className='modal-ov';
   div.innerHTML=`<div class="modal" style="max-width:520px">
     <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px">
@@ -1064,7 +1215,9 @@ function showBillDetail(id){
       <thead><tr><th>Device</th><th>Serial / IMEI</th><th>Price</th></tr></thead>
       <tbody>${items.map(i=>`<tr><td style="font-weight:700">${i.device_name||i.name||'—'}</td><td style="font-size:11px;color:var(--text3)">${i.serial?'SN:'+i.serial:''}${i.imei?' IMEI:'+i.imei:''}</td><td style="font-weight:800;color:var(--green)">${fmt(i.sale_price||i.price)}</td></tr>`).join('')}</tbody>
     </table></div>
-    <div style="text-align:right;font-size:18px;font-weight:800;color:var(--green);margin-bottom:12px">Total: ${fmt(b.total)}</div>
+    <div style="text-align:right;font-size:18px;font-weight:800;color:var(--green);margin-bottom:6px">Total: ${fmt(b.total)}</div>
+    ${paid>0?`<div style="text-align:right;font-size:13px;margin-bottom:4px;color:var(--text2)">Paid: <b style="color:var(--green)">${fmt(paid)}</b></div><div style="text-align:right;font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">Balance: ${fmt(bal)}</div>`:''}
+    <div style="margin-bottom:12px"><span class="badge ${status==='Cleared'?'badge-green':status==='Partial'?'badge-amber':'badge-red'}">${status}</span></div>
     ${b.notes?`<div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px;font-weight:500;border:1px solid var(--border)"><b>Notes:</b> ${b.notes}</div>`:''}
     <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text3);margin-bottom:14px;border:1px solid var(--border)">
       <div style="font-weight:700;color:var(--text2);margin-bottom:6px">Bank Details</div>
@@ -1072,7 +1225,7 @@ function showBillDetail(id){
       <div style="margin-top:4px">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
     </div>
     <div class="mbtns">
-      <button class="bsave" onclick="printBill('${b.id}')">🖨 Print</button>
+      <button class="bsave" onclick="this.closest('.modal-ov').remove();previewBill('${b.id}')">👁 Preview & Print</button>
       <button class="btn-wa" style="flex:1;padding:11px;border-radius:10px;font-size:13px" onclick="waBill('${b.id}')">💬 WhatsApp</button>
       <button class="bcancel" onclick="this.closest('.modal-ov').remove()">Close</button>
     </div>
@@ -1090,21 +1243,107 @@ function waBill(id){
   window.open(phone?`https://wa.me/92${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
+function previewBill(id){
+  const b=D.bills.find(x=>x.id===id);const s=D.settings||{};if(!b)return;
+  const terms=localStorage.getItem('ivault_terms')||'';
+  const items=b.items||[];
+  const div=document.createElement('div');div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:540px">
+    <h3>🖨 Print Preview — ${b.id}</h3>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase">Page Size</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${['A4','A5','Thermal 80mm'].map(sz=>`<button onclick="document.querySelectorAll('.size-btn').forEach(b=>b.classList.remove('active-size'));this.classList.add('active-size');selectedPaperSize='${sz}'" class="size-btn tab-btn${sz==='A5'?' active active-size':''}" style="font-size:12px;padding:7px 14px">${sz}</button>`).join('')}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;color:#111;font-family:sans-serif;font-size:12px;max-height:420px;overflow-y:auto" id="billPreviewContent">
+      <div style="border-bottom:2px solid #f0f0f0;padding-bottom:12px;margin-bottom:14px">
+        <div style="font-size:18px;font-weight:800;color:#f97316">${s.company_name||'iVault'}</div>
+        <div style="color:#888;font-size:11px;margin-top:2px">${s.address||''} · ${s.phone||''} · ${s.email||''}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+        <div><div style="font-size:9px;color:#999;font-weight:700;text-transform:uppercase">Invoice</div><div style="font-weight:800;color:#f97316">${b.id}</div></div>
+        <div><div style="font-size:9px;color:#999;font-weight:700;text-transform:uppercase">Date</div><div style="font-weight:700">${b.date}</div></div>
+        <div><div style="font-size:9px;color:#999;font-weight:700;text-transform:uppercase">Customer</div><div style="font-weight:700">${b.customer_name}</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px">
+        <thead><tr style="border-bottom:2px solid #eee"><th style="text-align:left;padding:6px 4px;font-size:10px;color:#888">Device</th><th style="text-align:left;padding:6px 4px;font-size:10px;color:#888">Serial</th><th style="text-align:left;padding:6px 4px;font-size:10px;color:#888">IMEI</th><th style="text-align:right;padding:6px 4px;font-size:10px;color:#888">Price</th></tr></thead>
+        <tbody>${items.map(i=>`<tr style="border-bottom:1px solid #f5f5f5"><td style="padding:7px 4px;font-weight:700">${i.device_name||i.name||'—'}</td><td style="padding:7px 4px;font-size:10px;color:#777">${i.serial||'—'}</td><td style="padding:7px 4px;font-size:10px;color:#777">${i.imei||'—'}</td><td style="padding:7px 4px;font-weight:800;text-align:right">Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table>
+      <div style="text-align:right;font-size:16px;font-weight:800;color:#22c55e;margin-bottom:8px">Total: Rs. ${Number(b.total).toLocaleString()}</div>
+      ${Number(b.amount_paid)>0?`<div style="text-align:right;font-size:13px;margin-bottom:4px">Paid: <b style="color:#22c55e">Rs. ${Number(b.amount_paid).toLocaleString()}</b></div><div style="text-align:right;font-size:13px;margin-bottom:8px">Balance: <b style="color:#ef4444">Rs. ${Number(b.balance||0).toLocaleString()}</b></div>`:''}
+      ${b.notes?`<div style="background:#fffbf0;border:1px solid #fde68a;border-radius:6px;padding:10px;font-size:11px;margin-bottom:10px"><b>Notes:</b> ${b.notes}</div>`:''}
+      <div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:11px;color:#555;margin-bottom:14px;border:1px solid #eee"><b>Bank Details:</b><br>${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}<br>${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+      ${terms?`<div style="border-top:1px solid #eee;padding-top:10px;margin-bottom:14px;font-size:10px;color:#777"><b style="font-size:11px;color:#555">Terms & Conditions:</b><br><div style="white-space:pre-line;line-height:1.6;margin-top:4px">${terms}</div></div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px;padding-top:14px;border-top:1px solid #eee">
+        <div style="text-align:center"><div style="height:50px;border-bottom:1.5px solid #aaa;margin-bottom:6px"></div><div style="font-size:10px;color:#888;font-weight:700">CUSTOMER SIGNATURE</div></div>
+        <div style="text-align:center"><div style="height:50px;border:1.5px dashed #ccc;border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center"><span style="font-size:10px;color:#ccc">Stamp Here</span></div><div style="font-size:10px;color:#888;font-weight:700">AUTHORIZED SIGNATURE & STAMP</div><div style="font-size:10px;color:#aaa;margin-top:2px">${s.company_name||''}</div></div>
+      </div>
+    </div>
+    <div class="mbtns" style="margin-top:14px">
+      <button class="bsave" onclick="printBill('${b.id}')">🖨 Print</button>
+      <button class="btn-wa" style="flex:1;padding:11px;border-radius:10px;font-size:13px" onclick="waBill('${b.id}')">💬 WhatsApp</button>
+      <button class="bcancel" onclick="this.closest('.modal-ov').remove()">Close</button>
+    </div>
+  </div>`;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+let selectedPaperSize='A5';
+
 function printBill(id){
   const b=D.bills.find(x=>x.id===id);const s=D.settings||{};if(!b)return;
+  const terms=localStorage.getItem('ivault_terms')||'';
   const items=b.items||[];
+  const size=selectedPaperSize||'A5';
+  const pageCSS=size==='A4'?'@page{size:A4;margin:15mm}body{max-width:190mm}':size==='Thermal 80mm'?'@page{size:80mm auto;margin:3mm 4mm}body{max-width:72mm;font-size:11px}':'@page{size:A5;margin:10mm}body{max-width:138mm}';
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>${b.id}</title><style>body{font-family:sans-serif;padding:32px;max-width:640px;margin:auto;color:#111}h2{color:#f97316;margin-bottom:4px;font-size:22px}.hdr{border-bottom:2px solid #f0f0f0;padding-bottom:14px;margin-bottom:18px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:18px;font-size:13px}.meta .ml{font-size:10px;color:#999;font-weight:700;text-transform:uppercase;margin-bottom:3px}.meta .mv{font-weight:700}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#f8f8f8;text-align:left;padding:8px 10px;font-size:11px;border-bottom:2px solid #eee;text-transform:uppercase;letter-spacing:.5px}td{padding:10px 10px;border-bottom:1px solid #f0f0f0}.tot{text-align:right;font-size:18px;font-weight:800;margin:16px 0;color:#22c55e}.banks{background:#f9fafb;padding:14px;border-radius:10px;font-size:12px;color:#555;margin-top:14px;border:1px solid #eee}.notes{background:#fffbf0;border:1px solid #fde68a;border-radius:10px;padding:12px;font-size:12px;color:#555;margin-top:12px}.footer{text-align:center;margin-top:20px;font-size:11px;color:#aaa}</style></head><body>
-  <div class="hdr"><h2>${s.company_name||'iVault'}</h2><div style="color:#888;font-size:12px">${s.address||''} · ${s.phone||''} · ${s.email||''}</div></div>
-  <div class="meta"><div><div class="ml">Invoice</div><div class="mv" style="color:#f97316">${b.id}</div></div><div><div class="ml">Date</div><div class="mv">${b.date}</div></div><div><div class="ml">Customer</div><div class="mv">${b.customer_name}</div></div></div>
-  <table><thead><tr><th>Device</th><th>Serial No.</th><th>IMEI</th><th>Sale Price</th></tr></thead><tbody>
-  ${items.map(i=>`<tr><td><b>${i.device_name||i.name||'—'}</b></td><td>${i.serial||'—'}</td><td>${i.imei||'—'}</td><td style="font-weight:800">Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td></tr>`).join('')}
+  w.document.write(`<!DOCTYPE html><html><head><title>${b.id}</title><style>
+  ${pageCSS}
+  *{box-sizing:border-box}
+  body{font-family:Arial,sans-serif;color:#111;margin:0;padding:${size==='Thermal 80mm'?'4px':'0'}}
+  .hdr{border-bottom:2px solid #f0f0f0;padding-bottom:10px;margin-bottom:12px}
+  h2{color:#f97316;margin:0 0 3px;font-size:${size==='Thermal 80mm'?'14px':'20px'}}
+  .sub{color:#888;font-size:${size==='Thermal 80mm'?'9px':'11px'}}
+  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;font-size:${size==='Thermal 80mm'?'10px':'12px'}}
+  .ml{font-size:9px;color:#999;font-weight:700;text-transform:uppercase;margin-bottom:2px}
+  .mv{font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:${size==='Thermal 80mm'?'10px':'12px'}}
+  th{background:#f8f8f8;text-align:left;padding:${size==='Thermal 80mm'?'5px 3px':'7px 8px'};font-size:${size==='Thermal 80mm'?'9px':'10px'};border-bottom:2px solid #eee;text-transform:uppercase}
+  td{padding:${size==='Thermal 80mm'?'5px 3px':'8px 8px'};border-bottom:1px solid #f0f0f0}
+  .tot{text-align:right;font-size:${size==='Thermal 80mm'?'14px':'16px'};font-weight:800;margin:10px 0 4px;color:#22c55e}
+  .paid-row{text-align:right;font-size:${size==='Thermal 80mm'?'11px':'13px'};margin-bottom:3px}
+  .bal-row{text-align:right;font-size:${size==='Thermal 80mm'?'12px':'14px'};font-weight:800;color:#ef4444;margin-bottom:8px}
+  .banks{background:#f9fafb;padding:10px;border-radius:6px;font-size:${size==='Thermal 80mm'?'9px':'11px'};color:#555;margin-top:10px;border:1px solid #eee}
+  .notes{background:#fffbf0;border:1px solid #fde68a;border-radius:6px;padding:8px;font-size:${size==='Thermal 80mm'?'9px':'11px'};color:#555;margin-top:8px}
+  .terms{border-top:1px solid #eee;padding-top:8px;margin-top:10px;font-size:${size==='Thermal 80mm'?'8px':'10px'};color:#777;line-height:1.6}
+  .sig-area{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid #eee}
+  .sig-box{text-align:center}
+  .sig-line{height:44px;border-bottom:1.5px solid #aaa;margin-bottom:5px}
+  .stamp-box{height:44px;border:1.5px dashed #ccc;border-radius:4px;margin-bottom:5px;display:flex;align-items:center;justify-content:center}
+  .sig-label{font-size:9px;color:#888;font-weight:700;text-transform:uppercase}
+  .footer{text-align:center;margin-top:12px;font-size:${size==='Thermal 80mm'?'8px':'10px'};color:#aaa}
+  </style></head><body>
+  <div class="hdr"><h2>${s.company_name||'iVault'}</h2><div class="sub">${s.address||''} · ${s.phone||''} · ${s.email||''}</div></div>
+  <div class="meta">
+    <div><div class="ml">Invoice</div><div class="mv" style="color:#f97316">${b.id}</div></div>
+    <div><div class="ml">Date</div><div class="mv">${b.date}</div></div>
+    <div><div class="ml">Customer</div><div class="mv">${b.customer_name}</div></div>
+  </div>
+  <table><thead><tr><th>Device</th>${size!=='Thermal 80mm'?'<th>Serial No.</th><th>IMEI</th>':''}<th style="text-align:right">Price</th></tr></thead><tbody>
+  ${items.map(i=>`<tr><td><b>${i.device_name||i.name||'—'}</b></td>${size!=='Thermal 80mm'?`<td style="font-size:10px;color:#777">${i.serial||'—'}</td><td style="font-size:10px;color:#777">${i.imei||'—'}</td>`:''}<td style="font-weight:800;text-align:right">Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td></tr>`).join('')}
   </tbody></table>
   <div class="tot">Total: Rs. ${Number(b.total).toLocaleString()}</div>
+  ${Number(b.amount_paid)>0?`<div class="paid-row">Paid: <b style="color:#22c55e">Rs. ${Number(b.amount_paid).toLocaleString()}</b></div><div class="bal-row">Balance Due: Rs. ${Number(b.balance||0).toLocaleString()}</div>`:''}
   ${b.notes?`<div class="notes"><b>Notes:</b> ${b.notes}</div>`:''}
-  <div class="banks"><b>Bank Details:</b><br>${s.bank1_name||''}: <b>${s.bank1_acc||''}</b> — ${s.bank1_title||''}<br>${s.bank2_name||''}: <b>${s.bank2_acc||''}</b> — ${s.bank2_title||''}</div>
+  <div class="banks"><b>Bank Details:</b><br>${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||''}</b> — ${s.bank1_title||''}<br>${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||''}</b> — ${s.bank2_title||''}</div>
+  ${terms?`<div class="terms"><b>Terms & Conditions:</b><br>${terms.replace(/\n/g,'<br>')}</div>`:''}
+  <div class="sig-area">
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Customer Signature</div></div>
+    <div class="sig-box"><div class="stamp-box"><span style="font-size:9px;color:#ccc">Official Stamp</span></div><div class="sig-label">Authorized Signature & Stamp</div><div style="font-size:9px;color:#aaa;margin-top:2px">${s.company_name||''}</div></div>
+  </div>
   <div class="footer">Thank you for your business! — ${s.company_name||'iVault'}</div>
-  <script>window.print();setTimeout(()=>window.close(),1500);<\/script></body></html>`);
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
   w.document.close();
 }
 
