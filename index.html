@@ -926,7 +926,7 @@ function rBackup(){
 // SETTINGS
 function rSettings(){
   const s=D.settings||{};const tab=ST.settingsTab||'company';
-  const terms=localStorage.getItem('ivault_terms')||'';
+  const terms=s.terms||'';
   return`
   <div class="page-header"><h1>Settings</h1></div>
   <div class="page-content">
@@ -944,11 +944,11 @@ function rSettings(){
     <button class="btn-orange" style="margin-top:14px" onclick="saveSettings()">✓ Save Settings</button>
   </div>`:tab==='terms'?`
   <div class="card"><div class="card-title">📋 Terms & Conditions on Bills</div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms will automatically appear at the bottom of every printed invoice. Write your return policy, payment terms, warranty policy etc.</p>
-    <div class="mfield"><label>TERMS & CONDITIONS</label><textarea id="s_terms" style="min-height:180px;line-height:1.7" placeholder="Example:&#10;• All sales are final. No returns after 24 hours.&#10;• Warranty void if device is physically damaged.&#10;• Payment must be cleared within 7 days.&#10;• We are not responsible for data loss during repair.">${terms}</textarea></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms auto-appear on every printed invoice. Saved to your account — never disappears.</p>
+    <div class="mfield"><label>TERMS & CONDITIONS</label><textarea id="s_terms" style="min-height:200px;line-height:1.8" placeholder="Example:&#10;• Bills without original stamp and signature will not be entertained.&#10;• Please check the device completely before leaving the shop.&#10;• All sales are final. No returns after 24 hours.&#10;• Warranty void if device is physically damaged.">${terms}</textarea></div>
     <button class="btn-orange" onclick="saveTerms()">✓ Save Terms</button>
     <div id="termsSavedMsg" style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600"></div>
-    ${terms?`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-top:14px;border:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Preview on invoice:</div><div style="font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.7">${terms}</div></div>`:''}
+    ${terms?`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-top:14px;border:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Preview on invoice:</div><div style="font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.8">${terms}</div></div>`:''}
   </div>`:`
   <div class="card"><div class="card-title">App Theme</div>
     <div class="theme-toggle">
@@ -959,12 +959,24 @@ function rSettings(){
   </div>`}
   </div>`;
 }
-function saveTerms(){
+
+async function saveTerms(){
   const v=document.getElementById('s_terms')?.value||'';
-  localStorage.setItem('ivault_terms',v);
+  const uid=CU.id;
+  const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
+  const res=exists&&exists.length>0
+    ?await api('PATCH','settings',{terms:v},`user_id=eq.${uid}`)
+    :await api('POST','settings',{user_id:uid,terms:v});
+  if(!res){
+    const el=document.getElementById('termsSavedMsg');
+    if(el){el.textContent='❌ Save failed. Please try again.';el.style.color='var(--red)';}
+    return;
+  }
+  // update local D.settings immediately so preview shows without reload
+  if(D.settings) D.settings.terms=v;
   const el=document.getElementById('termsSavedMsg');
-  if(el)el.textContent='✓ Terms saved! Will appear on all future invoices.';
-  setTimeout(()=>renderMain(),1200);
+  if(el) el.textContent='✓ Terms saved to your account! Appears on all invoices.';
+  setTimeout(()=>renderMain(),1400);
 }
 
 // ---- STOCK PURCHASE MODAL ----
@@ -1253,7 +1265,7 @@ function waBill(id){
 
 function previewBill(id){
   const b=D.bills.find(x=>x.id===id);const s=D.settings||{};if(!b)return;
-  const terms=localStorage.getItem('ivault_terms')||'';
+  const terms=s.terms||'';
   const items=b.items||[];
   const amtPaid=Number(b.amount_paid||0);
   const bal=Number(b.balance||0);
@@ -1332,7 +1344,7 @@ let selectedPaperSize='A5';
 
 function printBill(id){
   const b=D.bills.find(x=>x.id===id);const s=D.settings||{};if(!b)return;
-  const terms=localStorage.getItem('ivault_terms')||'';
+  const terms=s.terms||'';
   const items=b.items||[];
   const size=selectedPaperSize||'A5';
   const amtPaid=Number(b.amount_paid||0);
@@ -1560,7 +1572,7 @@ async function delRow(table,id){
 
 async function saveSettings(){
   const g=id=>document.getElementById(id)?.value||'';const uid=CU.id;
-  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title')};
+  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title'),terms:D.settings?.terms||''};
   const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
   const res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
   if(!res)return alert('Save failed');
