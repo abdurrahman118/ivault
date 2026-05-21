@@ -457,13 +457,18 @@ function rDevices(){
   <div class="page-header"><h1>Device Catalog</h1><button class="btn-orange" onclick="openModal('device',null)">+ Add Device</button></div>
   <div class="page-content">
   <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Add device models once. Serial/IMEI are added during stock purchases.</p>
-  <input class="plain-search" placeholder="Search devices..." value="${ST.search}" oninput="ST.search=this.value;renderMain()">
-  ${filtered.length===0?'<div class="empty">No devices yet. Add your first device model.</div>':filtered.map(d=>{
+  <input class="plain-search" id="devSearch" placeholder="Search devices..." value="${ST.search}" oninput="ST.search=this.value;refilter('devices')">
+  <div id="devList">${renderDeviceList(filtered)}</div>
+  </div>`;
+}
+function renderDeviceList(filtered){
+  if(!filtered)filtered=D.devices.filter(d=>(d.name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  if(filtered.length===0)return'<div class="empty">No devices yet. Add your first device model.</div>';
+  return filtered.map(d=>{
     const avail=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;
     const sold=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Sold').length;
-    return`<div class="item-row"><div class="mi"><div class="iname">${d.name}</div><div class="isub">${d.brand} · ${d.category} · Base cost: ${fmt(d.base_cost)}</div>${d.notes?`<div class="isub" style="font-style:italic">${d.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="openModal('device',${d.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="delRow('devices',${d.id})">🗑 Delete</button></div></div>
-    <div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--green)">${avail}</div><div style="font-size:11px;color:var(--text3)">available</div><div style="font-size:13px;font-weight:600;color:var(--text3);margin-top:4px">${sold} sold</div></div></div>`;}).join('')}
-  </div>`;
+    return`<div class="item-row"><div class="mi"><div class="iname">${d.name}</div><div class="isub">${d.brand} · ${d.category} · Base cost: ${fmt(d.base_cost)}</div>${d.notes?`<div class="isub" style="font-style:italic">${d.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="openModal('device',${d.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDel('devices',${d.id})">🗑 Delete</button></div></div>
+    <div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--green)">${avail}</div><div style="font-size:11px;color:var(--text3)">available</div><div style="font-size:13px;font-weight:600;color:var(--text3);margin-top:4px">${sold} sold</div></div></div>`;}).join('');
 }
 
 // STOCK PURCHASES
@@ -500,15 +505,20 @@ function rInventory(){
     <div class="metric-card"><div class="mc-label">Available</div><div class="mc-val green">${D.inventory.filter(i=>i.status==='Available').length}</div></div>
     <div class="metric-card"><div class="mc-label">Sold</div><div class="mc-val orange">${D.inventory.filter(i=>i.status==='Sold').length}</div></div>
   </div>
-  <input class="plain-search" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;renderMain()">
-  ${filtered.length===0?'<div class="empty">No inventory found</div>':filtered.map(i=>`
+  <input class="plain-search" id="invSearch" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;refilter('inventory')">
+  <div id="invList">${renderInventoryList(filtered)}</div>
+  </div>`;
+}
+function renderInventoryList(filtered){
+  if(!filtered)filtered=D.inventory.filter(i=>(i.serial||'').toLowerCase().includes(ST.search.toLowerCase())||(i.imei||'').toLowerCase().includes(ST.search.toLowerCase())||(i.device_name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  if(filtered.length===0)return'<div class="empty">No inventory found</div>';
+  return filtered.map(i=>`
     <div class="item-row"><div class="mi"><div class="iname">${i.device_name||'Unknown'}</div>
       <div class="isub">${[i.color,i.storage,i.condition].filter(Boolean).join(' · ')}</div>
       ${i.serial?`<div class="isub">Serial: <b>${i.serial}</b></div>`:''}
       ${i.imei?`<div class="isub">IMEI: <b>${i.imei}</b></div>`:''}
       <div class="isub">Cost: ${fmt(i.cost_price)} · ${i.date||''}</div>
-    </div><div style="text-align:right"><span class="badge ${i.status==='Available'?'badge-green':'badge-purple'}">${i.status}</span>${i.status==='Sold'?`<div style="font-size:10px;color:var(--text3);margin-top:5px">${i.sold_invoice||''}</div>`:''}</div></div>`).join('')}
-  </div>`;
+    </div><div style="text-align:right"><span class="badge ${i.status==='Available'?'badge-green':'badge-purple'}">${i.status}</span>${i.status==='Sold'?`<div style="font-size:10px;color:var(--text3);margin-top:5px">${i.sold_invoice||''}</div>`:''}</div></div>`).join('');
 }
 
 // PEOPLE — TABLE STYLE like inspiration
@@ -523,60 +533,76 @@ function rPeople(){
     <button class="tab-btn${isC?' active':''}" onclick="ST.peopleTab='customers';ST.search='';renderMain()">Customers (${D.customers.length})</button>
     <button class="tab-btn${!isC?' active':''}" onclick="ST.peopleTab='suppliers';ST.search='';renderMain()">Suppliers (${D.suppliers.length})</button>
   </div>
-  <div class="search-wrap"><input placeholder="Search by name, email, or phone..." value="${ST.search}" oninput="ST.search=this.value;renderMain()"></div>
-  <div class="card" style="padding:0;overflow:hidden">
-    ${filtered.length===0?`<div class="empty">No ${isC?'customers':'suppliers'} found</div>`:`
-    <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Name</th><th>Contact</th>${isC?'<th>Type</th>':''}<th>City</th><th>Actions</th></tr></thead>
-      <tbody>${filtered.map(x=>{
-        const color=avatarColor(x.name);const init=initials(x.name);
-        return`<tr>
-          <td><div style="display:flex;align-items:center;gap:10px"><div class="person-avatar" style="background:${color}">${init}</div><div><div style="font-weight:700">${x.name}</div></div></div></td>
-          <td><div style="font-size:12px">${x.email||'—'}</div><div style="font-size:12px;color:var(--text3)">${x.phone||'—'}</div></td>
-          ${isC?`<td><span class="badge ${x.type==='Wholesale'?'badge-amber':'badge-blue'}">${x.type||'Retail'}</span></td>`:''}
-          <td style="color:var(--text2)">${x.city||'—'}</td>
-          <td><div style="display:flex;gap:6px"><button class="iab" onclick="openModal('${isC?'cust':'supp'}',${x.id})">✏️</button><button class="iab" style="color:var(--red)" onclick="delRow('${isC?'customers':'suppliers'}',${x.id})">🗑</button></div></td>
-        </tr>`;}).join('')}
-      </tbody>
-    </table></div>`}
+  <div class="search-wrap"><input id="peopleSearch" placeholder="Search by name, email, or phone..." value="${ST.search}" oninput="ST.search=this.value;refilter('people')"></div>
+  <div class="card" style="padding:0;overflow:hidden" id="peopleList">
+    ${renderPeopleList(filtered,isC)}
   </div>
   </div>`;
 }
+function renderPeopleList(filtered,isC){
+  if(isC===undefined)isC=ST.peopleTab==='customers';
+  if(!filtered){const list=isC?D.customers:D.suppliers;filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase())||(x.phone||'').toLowerCase().includes(ST.search.toLowerCase())||(x.email||'').toLowerCase().includes(ST.search.toLowerCase()));}
+  if(filtered.length===0)return`<div class="empty">No ${isC?'customers':'suppliers'} found</div>`;
+  return`<div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Name</th><th>Contact</th>${isC?'<th>Type</th>':''}<th>City</th><th>Actions</th></tr></thead>
+    <tbody>${filtered.map(x=>{
+      const color=avatarColor(x.name);const init=initials(x.name);
+      return`<tr>
+        <td><div style="display:flex;align-items:center;gap:10px"><div class="person-avatar" style="background:${color}">${init}</div><div><div style="font-weight:700">${x.name}</div></div></div></td>
+        <td><div style="font-size:12px">${x.email||'—'}</div><div style="font-size:12px;color:var(--text3)">${x.phone||'—'}</div></td>
+        ${isC?`<td><span class="badge ${x.type==='Wholesale'?'badge-amber':'badge-blue'}">${x.type||'Retail'}</span></td>`:''}
+        <td style="color:var(--text2)">${x.city||'—'}</td>
+        <td><div style="display:flex;gap:6px"><button class="iab" onclick="openModal('${isC?'cust':'supp'}',${x.id})">✏️</button><button class="iab" style="color:var(--red)" onclick="confirmDel('${isC?'customers':'suppliers'}',${x.id})">🗑</button></div></td>
+      </tr>`;}).join('')}
+    </tbody></table></div>`;
+}
 // expose isC to onclick
 Object.defineProperty(window,'isC',{get:()=>ST.peopleTab==='customers'});
+
+// Refilter without full re-render — preserves focus
+function refilter(section){
+  if(section==='devices'){const el=document.getElementById('devList');if(el)el.innerHTML=renderDeviceList();}
+  else if(section==='inventory'){const el=document.getElementById('invList');if(el)el.innerHTML=renderInventoryList();}
+  else if(section==='people'){const el=document.getElementById('peopleList');if(el)el.innerHTML=renderPeopleList();}
+  else if(section==='billing'){const el=document.getElementById('billList');if(el)el.innerHTML=renderBillList();}
+}
 
 // BILLING
 function rBilling(){
   return`
   <div class="page-header"><h1>Billing</h1><button class="btn-orange" onclick="openBillModal()">+ New Invoice</button></div>
   <div class="page-content">
-  ${D.bills.length===0?'<div class="empty">No invoices yet</div>':`
-  <div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tbl">
+  <input class="plain-search" id="billSearch" placeholder="🔍 Search by invoice number or customer name..." value="${ST.search}" oninput="ST.search=this.value;refilter('billing')">
+  <div id="billList">${renderBillList()}</div>
+  </div>`;
+}
+function renderBillList(){
+  const filtered=D.bills.filter(b=>(b.id||'').toLowerCase().includes(ST.search.toLowerCase())||(b.customer_name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  if(filtered.length===0)return'<div class="empty">No invoices found</div>';
+  return`<div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>${D.bills.map(b=>{
-      const paid=D.customerPayments.filter(p=>p.customer_id==b.customer_id&&(p.note||'').includes(b.id)).reduce((a,p)=>a+Number(p.amount),0);
+    <tbody>${filtered.map(b=>{
       const bPaid=Number(b.amount_paid||0);
-      const totalPaid=Math.max(paid,bPaid);
-      const bal=Number(b.total)-totalPaid;
-      const status=bal<=0?'Cleared':totalPaid>0?'Partial':'Unpaid';
-      const statusColor=bal<=0?'badge-green':totalPaid>0?'badge-amber':'badge-red';
+      const bal=Number(b.balance??Number(b.total)-bPaid);
+      const status=b.pay_status||(bal<=0?'Cleared':bPaid>0?'Partial':'Unpaid');
+      const statusColor=bal<=0?'badge-green':bPaid>0?'badge-amber':'badge-red';
       return`<tr>
         <td style="color:var(--orange);font-weight:800;cursor:pointer" onclick="showBillDetail('${b.id}')">${b.id}</td>
         <td style="font-weight:600">${b.customer_name}</td>
         <td style="color:var(--text3)">${b.date}</td>
         <td style="color:var(--green);font-weight:800">${fmt(b.total)}</td>
-        <td style="color:var(--green);font-weight:700">${fmt(totalPaid)}</td>
+        <td style="color:var(--green);font-weight:700">${fmt(bPaid)}</td>
         <td style="color:${bal>0?'var(--red)':'var(--green)'};font-weight:700">${bal>0?fmt(bal):'✓'}</td>
         <td><span class="badge ${statusColor}">${status}</span></td>
         <td><div style="display:flex;gap:5px">
           <button class="iab" onclick="previewBill('${b.id}')">👁</button>
+          <button class="iab" onclick="openEditBillModal('${b.id}')">✏️</button>
           <button class="iab" onclick="waBill('${b.id}')">💬</button>
-          <button class="iab" style="color:var(--red)" onclick="delBill('${b.id}')">🗑</button>
+          <button class="iab" style="color:var(--red)" onclick="confirmDelBill('${b.id}')">🗑</button>
         </div></td>
       </tr>`;}).join('')}
     </tbody>
-  </table></div></div>`}
-  </div>`;
+  </table></div></div>`;
 }
 
 // EXPENSES
@@ -1176,8 +1202,10 @@ async function saveBill(){
   const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
   const amountPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('bill_amount_paid')?.value||0):0;
   const balance=total-amountPaid;
-  const num=String(D.bills.length+1).padStart(3,'0');
-  const billId=`INV-${num}`;
+  const d=new Date();
+  const datePart=`${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const timePart=String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0');
+  const billId=`INV-${datePart}-${timePart}`;
   const custId=document.getElementById('bill_cust_id')?.value||null;
   // Try with new columns first, fallback to basic columns if it fails
   let res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amountPaid,balance});
@@ -1453,6 +1481,91 @@ function printBill(id){
   <script>window.print();setTimeout(()=>window.close(),2000);<\/script>
   </body></html>`);
   w.document.close();
+}
+
+// CONFIRM DELETE — global modal
+function confirmDel(table,id){
+  const labels={devices:'device',customers:'customer',suppliers:'supplier',expenses:'expense',repairs:'repair job'};
+  showConfirm(`Delete this ${labels[table]||'item'}? This cannot be undone.`,()=>delRow(table,id));
+}
+function confirmDelBill(id){showConfirm('Delete this invoice permanently? Sold inventory items will be marked available again.',()=>delBill(id));}
+function confirmDelPurchase(id){showConfirm('Delete this purchase? All associated inventory units will also be deleted.',()=>delPurchase(id));}
+function showConfirm(msg,onYes){
+  const old=document.getElementById('confirmModal');if(old)old.remove();
+  const div=document.createElement('div');div.id='confirmModal';div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:380px;text-align:center">
+    <div style="font-size:36px;margin-bottom:10px">⚠️</div>
+    <h3 style="margin-bottom:10px;color:var(--text)">Are you sure?</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;font-weight:500">${msg}</p>
+    <div style="display:flex;gap:10px">
+      <button style="flex:1;padding:11px;background:var(--red);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700" onclick="document.getElementById('confirmModal').remove();(window._confirmYes||function(){})()">Yes, Delete</button>
+      <button class="bcancel" onclick="document.getElementById('confirmModal').remove()">Cancel</button>
+    </div>
+  </div>`;
+  window._confirmYes=onYes;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
+// EDIT BILL
+function openEditBillModal(id){
+  const b=D.bills.find(x=>x.id===id);if(!b)return;
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+    <h3>✏️ Edit Invoice — ${b.id}</h3>
+    <div class="mfield"><label>CUSTOMER NAME</label><input id="eb_cust" value="${b.customer_name||''}"></div>
+    <div class="mfield"><label>CUSTOMER PHONE</label><input id="eb_phone" value="${b.customer_phone||''}"></div>
+    <div class="mfield"><label>DATE</label><input type="date" id="eb_date" value="${b.date||today()}"></div>
+    <div class="mfield"><label>NOTES</label><textarea id="eb_notes" style="min-height:70px">${b.notes||''}</textarea></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div>
+      <div class="mfield"><label>STATUS</label><select id="eb_status" onchange="document.getElementById('eb_partial').style.display=this.value==='Partial'?'block':'none'">
+        <option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid — Full amount due</option>
+        <option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial — Paid some</option>
+        <option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared — Fully paid</option>
+      </select></div>
+      <div id="eb_partial" style="${b.pay_status==='Partial'?'':'display:none'}">
+        <div class="mfield"><label>AMOUNT PAID (RS.)</label><input type="number" id="eb_paid" value="${b.amount_paid||0}"></div>
+      </div>
+    </div>
+    <div class="mbtns"><button class="bsave" onclick="saveEditBill('${b.id}')">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+  document.body.appendChild(div);
+}
+async function saveEditBill(id){
+  const b=D.bills.find(x=>x.id===id);if(!b)return;
+  const payStatus=document.getElementById('eb_status')?.value||'Unpaid';
+  const amtPaid=payStatus==='Cleared'?Number(b.total):payStatus==='Partial'?Number(document.getElementById('eb_paid')?.value||0):0;
+  const data={customer_name:document.getElementById('eb_cust')?.value?.trim()||b.customer_name,customer_phone:document.getElementById('eb_phone')?.value?.trim()||'',date:document.getElementById('eb_date')?.value||b.date,notes:document.getElementById('eb_notes')?.value?.trim()||'',pay_status:payStatus,amount_paid:amtPaid,balance:Number(b.total)-amtPaid};
+  const res=await api('PATCH','bills',data,`id=eq.${id}`);
+  if(!res)return alert('Save failed. Try again.');
+  closeModal();await loadAll();renderMain();
+}
+
+// EDIT STOCK PURCHASE
+function openEditStockModal(id){
+  const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:460px">
+    <h3>✏️ Edit Purchase — ${s.purchase_id||s.id}</h3>
+    <div class="tf">
+      <div class="mfield"><label>DATE</label><input type="date" id="esp_date" value="${s.date||today()}"></div>
+      <div class="mfield"><label>PURCHASE ID</label><input id="esp_pid" value="${s.purchase_id||''}"></div>
+    </div>
+    <div class="mfield"><label>SUPPLIER NAME</label><input id="esp_supplier" value="${s.supplier_name||''}"></div>
+    <div class="mfield"><label>NOTES</label><textarea id="esp_notes">${s.notes||''}</textarea></div>
+    <div class="mbtns"><button class="bsave" onclick="saveEditStock(${id})">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+  document.body.appendChild(div);
+}
+async function saveEditStock(id){
+  const supplier=document.getElementById('esp_supplier')?.value?.trim();
+  if(!supplier)return alert('Supplier name required');
+  const res=await api('PATCH','stock_purchases',{date:document.getElementById('esp_date')?.value,purchase_id:document.getElementById('esp_pid')?.value,supplier_name:supplier,notes:document.getElementById('esp_notes')?.value?.trim()||''},`id=eq.${id}`);
+  if(!res)return alert('Save failed');
+  closeModal();await loadAll();renderMain();
 }
 
 async function delBill(id){
