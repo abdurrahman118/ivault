@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>iVault — Device Shop Manager (Fixed)</title>
+<title>iVault — Device Shop Manager</title>
 <style>
 :root{
   --bg:#0b0d14;--bg2:#13161f;--bg3:#1a1d28;--bg4:#21253a;
@@ -380,7 +380,7 @@ async function loadAll(){
   D.customers=d||[];D.suppliers=e||[];D.bills=f||[];
   D.expenses=g||[];D.repairs=h||[];
   D.customerPayments=cp||[];D.supplierPayments=sp||[];
-  D.settings=s&&s[0]?s[0]:{company_name:'iVault',address:'',phone:'',email:'',bank1_name:'HBL',bank1_acc:'',bank1_title:'',bank2_name:'Meezan Bank',bank2_acc:'',bank2_title:'',opening_balances:{}};
+  D.settings=s&&s[0]?s[0]:{company_name:'iVault',address:'',phone:'',email:'',bank1_name:'HBL',bank1_acc:'',bank1_title:'',bank2_name:'Meezan Bank',bank2_acc:'',bank2_title:''};
   if(!D.settings.opening_balances) D.settings.opening_balances={};
 }
 
@@ -398,13 +398,12 @@ function renderMain(){
   document.getElementById('main').innerHTML=(pages[ST.tab]||rDash)();
 }
 
-// ========== FIX 1 – DASHBOARD WITH "SEE MORE" ==========
+// ========== FIX 1 – DASHBOARD "SEE MORE" ==========
 function getOpeningBalance(type, id) {
   const key = (type===1?'cust_':'supp_') + id;
   const ob = D.settings?.opening_balances || {};
   return Number(ob[key] || 0);
 }
-
 function toggleDashSection(key) {
   ST.dashExpanded[key] = !ST.dashExpanded[key];
   renderMain();
@@ -576,7 +575,6 @@ function openOpeningBalanceModal(type, id, name){
   div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px"><h3>📌 Opening Balance — ${name}</h3><div style="background:var(--amber-bg);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--amber);font-weight:600;line-height:1.7">💡 Use this to record any debt that existed <b>before</b> you started using iVault.<br>${isC?'A positive amount means this customer already owed you money.':'A positive amount means you already owed this supplier money.'}</div><div class="mfield"><label>OPENING BALANCE (RS.)</label><input type="number" id="ob_amount" value="${currentOB}" placeholder="0" min="0"></div><div style="font-size:11px;color:var(--text3);margin-bottom:12px;font-weight:500">Set to 0 to clear the opening balance.</div><div class="mbtns"><button class="bsave" onclick="saveOpeningBalance(${type},${id},'${name}')">✓ Save Opening Balance</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
   document.body.appendChild(div);
 }
-
 async function saveOpeningBalance(type, id, name){
   const amount = Number(document.getElementById('ob_amount')?.value || 0);
   const key = (type===1?'cust_':'supp_') + id;
@@ -591,7 +589,6 @@ async function saveOpeningBalance(type, id, name){
   closeModal();
   renderMain();
 }
-
 function openPaymentModal(type,id,name){
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
@@ -599,7 +596,6 @@ function openPaymentModal(type,id,name){
   div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px"><h3>${isC?'📥':'📤'} Record Payment — ${name}</h3><div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500">${isC?'💡 Customer paying you — record money received':'💡 You paying supplier — record money sent'}</div><div class="mfield"><label>DATE</label><input type="date" id="pay_date" value="${today()}"></div><div class="mfield"><label>AMOUNT (RS.) *</label><input type="number" id="pay_amount" placeholder="Enter payment amount..."></div><div class="mfield"><label>PAYMENT METHOD</label><select id="pay_method"><option>Cash</option><option>Bank Transfer</option><option>HBL</option><option>Meezan Bank</option><option>JazzCash</option><option>Easypaisa</option><option>Cheque</option></select></div><div class="mfield"><label>NOTE (OPTIONAL)</label><input id="pay_note" placeholder="e.g. Partial payment, Invoice INV-001..."></div><div class="mbtns"><button class="bsave" onclick="savePayment(${type},${id},'${name}')">✓ Save Payment</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
   document.body.appendChild(div);
 }
-
 async function savePayment(type,id,name){
   const date=document.getElementById('pay_date')?.value;
   const amount=Number(document.getElementById('pay_amount')?.value||0);
@@ -613,7 +609,6 @@ async function savePayment(type,id,name){
   if(!res)return alert('Save failed. Please try again.');
   closeModal();await loadAll();renderMain();
 }
-
 function buildLedgerTimeline(type,id,name){
   const isC=type===1;
   const ob=getOpeningBalance(type,id);
@@ -629,7 +624,6 @@ function buildLedgerTimeline(type,id,name){
   let running=0;
   return timeline.map(t=>{running+=t.debit-t.credit;return{...t,running};});
 }
-
 function showLedgerDetail(type,id,name){
   const isC=type===1;
   const rows=buildLedgerTimeline(type,id,name);
@@ -641,7 +635,6 @@ function showLedgerDetail(type,id,name){
   div.onclick=e=>{if(e.target===div)div.remove();};
   document.body.appendChild(div);
 }
-
 function printIndividualLedger(type,id,name){
   const isC=type===1;
   const s=D.settings||{};
@@ -654,7 +647,6 @@ function printIndividualLedger(type,id,name){
   w.document.write(`<!DOCTYPE html><html><head><title>Ledger — ${name}</title><style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px;color:#333}.hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.mc{background:#f9f9f9;border-radius:6px;padding:10px}.mc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.mc .v{font-size:16px;font-weight:800;margin-top:3px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}td{padding:7px 8px;border-bottom:1px solid #f0f0f0}.green{color:#16a34a}.red{color:#dc2626}.footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}</style></head><body><div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div><h2>${isC?'Customer':'Supplier'} Ledger Report — ${name}</h2><div style="font-size:12px;margin-bottom:12px">${person?.phone?'Phone: '+person.phone+' · ':''} ${person?.city?'City: '+person.city:''} · Generated: ${new Date().toLocaleDateString()}</div><div class="meta"><div class="mc"><div class="l">${isC?'Total Billed':'Total Purchased'}</div><div class="v red">Rs. ${totalDebit.toLocaleString()}</div></div><div class="mc"><div class="l">Total Paid</div><div class="v green">Rs. ${totalCredit.toLocaleString()}</div></div><div class="mc"><div class="l">Balance</div><div class="v" style="color:${balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(balance).toLocaleString()} ${balance>0?'Due':'✓ Cleared'}</div></div></div><h2>Transaction History</h2><table><thead><tr><th>Date</th><th>Description</th><th>${isC?'Invoice':'Purchase'}</th><th>Payment</th><th>Running Balance</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.date==='0000-00-00'?'Opening':r.date}</td><td>${r.label}</td><td class="red">${r.debit>0?'Rs. '+r.debit.toLocaleString():'—'}</td><td class="green">${r.credit>0?'Rs. '+r.credit.toLocaleString():'—'}</td><td style="font-weight:700;color:${r.running>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.running).toLocaleString()}</td></tr>`).join('')}</tbody></table><div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div><script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
   w.document.close();
 }
-
 function printCombinedLedger(type){
   const isC=type===1;
   const s=D.settings||{};
@@ -670,7 +662,6 @@ function printCombinedLedger(type){
   w.document.write(`<!DOCTYPE html><html><head><title>${isC?'Customer':'Supplier'} Ledger Report</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px}.hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.sc{background:#f9f9f9;border-radius:6px;padding:10px}.sc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.sc .v{font-size:18px;font-weight:800;margin-top:3px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}td{padding:7px 8px;border-bottom:1px solid #f0f0f0}tr:hover td{background:#fafafa}.green{color:#16a34a}.red{color:#dc2626}.tfoot td{font-weight:800;background:#f5f5f5;border-top:2px solid #ddd}.footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}</style></head><body><div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div><h2>All ${isC?'Customer':'Supplier'} Ledger Report — ${new Date().toLocaleDateString()}</h2><div class="summary"><div class="sc"><div class="l">Total ${isC?'Billed':'Purchased'}</div><div class="v red">Rs. ${grandBilled.toLocaleString()}</div></div><div class="sc"><div class="l">Total Received/Paid</div><div class="v green">Rs. ${grandPaid.toLocaleString()}</div></div><div class="sc"><div class="l">Total Outstanding</div><div class="v" style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</div></div></div><table><thead><tr><th>#</th><th>${isC?'Customer':'Supplier'} Name</th><th>Phone</th><th>City</th><th>${isC?'Total Billed':'Total Purchased'}</th><th>Total Paid</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td style="font-weight:700">${r.name}</td><td>${r.phone}</td><td>${r.city}</td><td class="red">Rs. ${r.billed.toLocaleString()}</td><td class="green">Rs. ${r.paid.toLocaleString()}</td><td style="font-weight:800;color:${r.balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.balance).toLocaleString()}</td><td>${r.balance<=0?'✓ Cleared':r.balance===r.billed?'Unpaid':'Partial'}</td></tr>`).join('')}</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td class="red">Rs. ${grandBilled.toLocaleString()}</td><td class="green">Rs. ${grandPaid.toLocaleString()}</td><td style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</td><td></td></tr></tfoot></table><div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div><script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
   w.document.close();
 }
-
 async function delPayment(type,id){
   if(!confirm('Delete this payment record?'))return;
   const table=type===1?'customer_payments':'supplier_payments';
@@ -682,7 +673,6 @@ async function delPayment(type,id){
 
 // ========== FIX 3 – FULL BILL EDIT (items can be changed) ==========
 let editBillItems=[];
-
 function openEditBillModal(id){
   const b=D.bills.find(x=>x.id===id);if(!b)return;
   editBillItems=(b.items||[]).map(i=>({...i,sale_price:i.sale_price||i.price||0,search:i.device_name||''}));
@@ -693,7 +683,6 @@ function openEditBillModal(id){
   refreshEditBillItems();
   updateEditBillTotals();
 }
-
 function addEditBillItem(){
   editBillItems.push({inv_id:null,device_name:'',serial:'',imei:'',sale_price:'',cost_price:0,search:'',isNew:true});
   refreshEditBillItems();
@@ -759,12 +748,22 @@ function rBackup(){
   const bEmail=localStorage.getItem('ivault_backup_email')||'';
   return`<div class="page-header"><h1>Backup & Export</h1></div><div class="page-content"><div class="card"><div class="card-title">📊 Export Data</div><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Download your full business data anytime.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-green" onclick="exportExcel()">📊 Export Excel/CSV</button><button class="btn-blue" onclick="exportPDF()">📄 Export PDF</button><button class="btn-outline" onclick="exportJSON()">💾 Full Backup (JSON)</button></div></div><div class="card"><div class="card-title">☁️ Cloud Status</div><div class="ri"><div>Supabase cloud sync</div><span class="badge badge-green">Always ON ✓</span></div><div class="ri"><div>Row-level security</div><span class="badge badge-green">Active ✓</span></div><div class="ri"><div>Last local backup</div><span style="font-size:12px;color:var(--text3)">${last}</span></div><button class="btn-green" style="margin-top:12px" onclick="manualBackup()">⬇️ Download Local Backup</button></div><div class="card"><div class="card-title">📧 Monthly Email Backup</div><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Save your email to receive monthly backup reminders.</p><div class="mfield"><label>BACKUP EMAIL</label><input id="backupEmailInput" type="email" value="${bEmail}" placeholder="your@email.com"></div><button class="btn-orange" onclick="saveBackupEmail()">✓ Save Email</button><div id="backupEmailMsg" style="font-size:12px;margin-top:8px;color:var(--green);font-weight:600"></div></div></div>`;
 }
+function manualBackup(){ exportJSON(); localStorage.setItem('ivault_last_backup',new Date().toLocaleString()); renderMain(); }
+function saveBackupEmail(){ const email=document.getElementById('backupEmailInput')?.value?.trim(); if(!email)return; localStorage.setItem('ivault_backup_email',email); const el=document.getElementById('backupEmailMsg'); if(el)el.textContent='✓ Saved! Monthly backup reminders enabled.'; }
 
 // SETTINGS
 function rSettings(){
   const s=D.settings||{};const tab=ST.settingsTab||'company';
   const terms=s.terms||'';
   return`<div class="page-header"><h1>Settings</h1></div><div class="page-content"><div class="tab-row"><button class="tab-btn${tab==='company'?' active':''}" onclick="ST.settingsTab='company';renderMain()">🏪 Company Info</button><button class="tab-btn${tab==='terms'?' active':''}" onclick="ST.settingsTab='terms';renderMain()">📋 Bill Terms</button><button class="tab-btn${tab==='theme'?' active':''}" onclick="ST.settingsTab='theme';renderMain()">🎨 Theme</button></div>${tab==='company'?`<div class="card"><div class="card-title">Company Information</div><div class="tf">${[['Company Name','company_name'],['Address','address'],['Phone','phone'],['Email','email']].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div></div><div class="card"><div class="card-title">Bank Accounts</div><div class="two-col">${[1,2].map(n=>`<div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)"><div style="font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px">BANK ${n}</div>${[['Bank Name',`bank${n}_name`],['Account No.',`bank${n}_acc`],['Account Title',`bank${n}_title`]].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>`).join('')}</div><button class="btn-orange" style="margin-top:14px" onclick="saveSettings()">✓ Save Settings</button></div>`:tab==='terms'?`<div class="card"><div class="card-title">📋 Terms & Conditions on Bills</div><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms auto-appear on every printed invoice. Saved to your account — never disappears.</p><div class="mfield"><label>TERMS & CONDITIONS</label><textarea id="s_terms" style="min-height:200px;line-height:1.8" placeholder="Example:&#10;• Bills without original stamp and signature will not be entertained.&#10;• Please check the device completely before leaving the shop.&#10;• All sales are final. No returns after 24 hours.&#10;• Warranty void if device is physically damaged.">${terms}</textarea></div><button class="btn-orange" onclick="saveTerms()">✓ Save Terms</button><div id="termsSavedMsg" style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600"></div>${terms?`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-top:14px;border:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Preview on invoice:</div><div style="font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.8">${terms}</div></div>`:''}</div>`:`<div class="card"><div class="card-title">App Theme</div><div class="theme-toggle"><button class="theme-btn${THEME==='dark'?' active':''}" onclick="applyTheme('dark');renderMain()">🌙 Dark Mode</button><button class="theme-btn${THEME==='light'?' active':''}" onclick="applyTheme('light');renderMain()">☀️ Light Mode</button></div><p style="font-size:13px;color:var(--text2);font-weight:500">Theme preference is saved on this device.</p></div>`}</div>`;
+}
+async function saveSettings(){
+  const g=id=>document.getElementById(id)?.value||'';const uid=CU.id;
+  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title'),terms:D.settings?.terms||'',opening_balances:D.settings?.opening_balances||{}};
+  const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
+  const res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
+  if(!res)return alert('Save failed');
+  await loadAll();alert('Settings saved ✓');
 }
 async function saveTerms(){
   const v=document.getElementById('s_terms')?.value||'';
@@ -776,16 +775,8 @@ async function saveTerms(){
   const el=document.getElementById('termsSavedMsg'); if(el) el.textContent='✓ Terms saved to your account! Appears on all invoices.';
   setTimeout(()=>renderMain(),1400);
 }
-async function saveSettings(){
-  const g=id=>document.getElementById(id)?.value||'';const uid=CU.id;
-  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title'),terms:D.settings?.terms||'',opening_balances:D.settings?.opening_balances||{}};
-  const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
-  const res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
-  if(!res)return alert('Save failed');
-  await loadAll();alert('Settings saved ✓');
-}
 
-// ---- STOCK PURCHASE MODAL ----
+// ---- STOCK PURCHASE MODAL (new) ----
 function openStockModal(){
   stockUnits=[];
   const old=document.getElementById('modalWrap');if(old)old.remove();
@@ -849,4 +840,65 @@ function updateBillBalance(){
 function addBillItem(){ billItems.push({inv_id:null,device_name:'',serial:'',imei:'',sale_price:'',cost_price:0,search:''}); refreshBillItems(); }
 function refreshBillItems(){
   const wrap=document.getElementById('billItemsWrap');if(!wrap)return;
-  wrap.innerHTML=billItems.map((item,i)=>`<div class="unit-row"><div class="unit-title"><span>Item ${i+1}</span><button onclick="billItems.splice(${i},1);refreshBillItems()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕</button></div><div class="mfield"><label>SEARCH BY IMEI / SERIAL / DEVICE NAME</label><div class="suggest-wrap"><input id="bi_search_${i}" value="${item.search||''}" placeholder="Type IMEI, serial or device name..." oninput="searchInventory(${i},this.value)"><div id="bi_suggest_${i}" class="suggest-list" style="display:none"></div></div></div>${item.inv_id?`<div class="info-badge">✓ ${item
+  wrap.innerHTML=billItems.map((item,i)=>`<div class="unit-row"><div class="unit-title"><span>Item ${i+1}</span><button onclick="billItems.splice(${i},1);refreshBillItems()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕</button></div><div class="mfield"><label>SEARCH BY IMEI / SERIAL / DEVICE NAME</label><div class="suggest-wrap"><input id="bi_search_${i}" value="${item.search||''}" placeholder="Type IMEI, serial or device name..." oninput="searchInventory(${i},this.value)"><div id="bi_suggest_${i}" class="suggest-list" style="display:none"></div></div></div>${item.inv_id?`<div class="info-badge">✓ ${item.device_name}${item.serial?' · SN:'+item.serial:''}${item.imei?' · IMEI:'+item.imei:''}</div>`:''}<div class="mfield"><label>SALE PRICE (RS.) — ENTER MANUAL PER DEAL</label><input type="number" id="bi_price_${i}" value="${item.sale_price||''}" oninput="billItems[${i}].sale_price=this.value" placeholder="Enter agreed sale price..."></div></div>`).join('');
+}
+function searchInventory(idx,query){
+  const suggestEl=document.getElementById(`bi_suggest_${idx}`);
+  if(!query||query.length<1){if(suggestEl)suggestEl.style.display='none';return;}
+  const results=D.inventory.filter(i=>i.status==='Available'&&((i.imei||'').toLowerCase().includes(query.toLowerCase())||(i.serial||'').toLowerCase().includes(query.toLowerCase())||(i.device_name||'').toLowerCase().includes(query.toLowerCase()))).slice(0,8);
+  if(!suggestEl)return;
+  if(results.length===0){suggestEl.innerHTML='<div class="suggest-item" style="color:var(--text3)">No available units found</div>';suggestEl.style.display='block';return;}
+  suggestEl.style.display='block';
+  suggestEl.innerHTML=results.map(r=>`<div class="suggest-item" onclick="selectInventoryItem(${idx},${r.id})"><b>${r.device_name}</b>${r.color?' · '+r.color:''}${r.storage?' · '+r.storage:''}<br><span style="font-size:11px;color:var(--text3)">${r.serial?'SN: '+r.serial+' ':''}${r.imei?'IMEI: '+r.imei:''} · Cost: ${fmt(r.cost_price)}</span></div>`).join('');
+}
+function selectInventoryItem(idx,invId){
+  const inv=D.inventory.find(i=>i.id===invId);if(!inv)return;
+  billItems[idx]={...billItems[idx],inv_id:invId,device_name:inv.device_name,serial:inv.serial||'',imei:inv.imei||'',cost_price:inv.cost_price,search:`${inv.device_name} ${inv.serial||''} ${inv.imei||''}`};
+  const el=document.getElementById(`bi_suggest_${idx}`);if(el)el.style.display='none';
+  refreshBillItems();
+  setTimeout(()=>{const p=document.getElementById(`bi_price_${idx}`);if(p)p.value=billItems[idx].sale_price||'';},30);
+}
+async function saveBill(){
+  const custName=document.getElementById('bill_cust_name')?.value?.trim();
+  const custPhone=document.getElementById('bill_cust_phone')?.value?.trim()||'';
+  const notes=document.getElementById('bill_notes')?.value?.trim()||'';
+  const payStatus=document.getElementById('bill_pay_status')?.value||'Unpaid';
+  if(!custName)return alert('Customer name is required');
+  billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=el.value;});
+  const validItems=billItems.filter(item=>Number(item.sale_price)>0);
+  if(validItems.length===0)return alert('Add at least 1 item with a sale price');
+  const total=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
+  const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
+  const amountPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('bill_amount_paid')?.value||0):0;
+  const balance=total-amountPaid;
+  const d=new Date();
+  const datePart=`${String(d.getFullYear()).slice(2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const timePart=String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0');
+  const billId=`INV-${datePart}-${timePart}`;
+  const custId=document.getElementById('bill_cust_id')?.value||null;
+  let res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amountPaid,balance});
+  if(!res||!res[0]){ res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes}); if(!res||!res[0])return alert('Failed to create invoice. Please try again.'); }
+  for(const item of validItems){ if(item.inv_id)await api('PATCH','inventory',{status:'Sold',sold_invoice:billId},`id=eq.${item.inv_id}`); }
+  if(amountPaid>0&&custId){ await api('POST','customer_payments',{user_id:CU.id,customer_id:Number(custId),customer_name:custName,amount:amountPaid,payment_method:'Cash',note:`Payment on ${billId}`,date:today()}); }
+  closeModal();await loadAll();renderMain();
+}
+
+// ---- HELPER: filterSuggest, showBillDetail, waBill, previewBill, printBill, confirm helpers, etc. ----
+function filterSuggest(inputId,hiddenId,list,labelField,valueField){
+  const query=document.getElementById(inputId)?.value?.toLowerCase()||'';
+  const el=document.getElementById(inputId+'_suggest');if(!el)return;
+  if(!query){el.style.display='none';return;}
+  const results=list.filter(x=>(x[labelField]||'').toLowerCase().includes(query)).slice(0,8);
+  if(results.length===0){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=results.map(x=>`<div class="suggest-item" onclick="selectSuggest('${inputId}','${hiddenId}','${(x[labelField]||'').replace(/'/g,"\\'")}','${x[valueField]}')">${x[labelField]}</div>`).join('');
+}
+function selectSuggest(inputId,hiddenId,label,value){
+  const inp=document.getElementById(inputId);const hid=document.getElementById(hiddenId);
+  if(inp)inp.value=label;if(hid)hid.value=value;
+  const el=document.getElementById(inputId+'_suggest');if(el)el.style.display='none';
+  if(inputId==='bill_cust_name'){const c=D.customers.find(x=>String(x.id)===String(value));if(c?.phone){const ph=document.getElementById('bill_cust_phone');if(ph&&!ph.value)ph.value=c.phone;}}
+}
+
+function showBillDetail(id){
+  const b=D.bills.find(x=>
