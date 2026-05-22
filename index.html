@@ -459,7 +459,6 @@ function toggleMore(id,btn){
   el.style.display=hidden?'block':'none';
   btn.textContent=hidden?'▲ Show less':`▼ See more`;
 }
-}
 
 // DEVICES
 function rDevices(){
@@ -1656,9 +1655,12 @@ async function saveEditBill(id){
 // EDIT STOCK PURCHASE
 function openEditStockModal(id){
   const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
+  const units=D.inventory.filter(i=>i.purchase_id==id);
+  // clone units for editing
+  window._editStockUnits=units.map(u=>({...u}));
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:460px">
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:580px">
     <h3>✏️ Edit Purchase — ${s.purchase_id||s.id}</h3>
     <div class="tf">
       <div class="mfield"><label>DATE</label><input type="date" id="esp_date" value="${s.date||today()}"></div>
@@ -1666,15 +1668,83 @@ function openEditStockModal(id){
     </div>
     <div class="mfield"><label>SUPPLIER NAME</label><input id="esp_supplier" value="${s.supplier_name||''}"></div>
     <div class="mfield"><label>NOTES</label><textarea id="esp_notes">${s.notes||''}</textarea></div>
-    <div class="mbtns"><button class="bsave" onclick="saveEditStock(${id})">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Units (${units.length})</div>
+    <div id="editStockUnitsWrap"></div>
+    <div class="mbtns"><button class="bsave" onclick="saveEditStock(${id})">✓ Save All Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
   </div></div>`;
   document.body.appendChild(div);
+  renderEditStockUnits();
 }
+
+function renderEditStockUnits(){
+  const wrap=document.getElementById('editStockUnitsWrap');if(!wrap)return;
+  const units=window._editStockUnits||[];
+  const deviceOpts=D.devices.map(d=>`<option value="${d.id}">${d.name} (${d.category})</option>`).join('');
+  wrap.innerHTML=units.map((u,i)=>`
+    <div class="unit-row">
+      <div class="unit-title">
+        <span>Unit ${i+1} — <span class="badge ${u.status==='Available'?'badge-green':'badge-purple'}">${u.status}</span></span>
+        ${u.status==='Available'?`<button onclick="removeEditStockUnit(${i})" style="font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button>`:'<span style="font-size:10px;color:var(--text3)">(sold — limited edit)</span>'}
+      </div>
+      <div class="tf">
+        <div class="mfield"><label>DEVICE</label>
+          <select onchange="window._editStockUnits[${i}].device_id=this.value;window._editStockUnits[${i}].device_name=this.options[this.selectedIndex]?.text?.split(' (')[0]||''">
+            <option value="">Select device...</option>
+            ${D.devices.map(d=>`<option value="${d.id}"${String(u.device_id)==String(d.id)?' selected':''}>${d.name} (${d.category})</option>`).join('')}
+          </select>
+        </div>
+        <div class="mfield"><label>COST PRICE (RS.)</label><input type="number" value="${u.cost_price||''}" oninput="window._editStockUnits[${i}].cost_price=Number(this.value)" placeholder="Cost..."></div>
+        <div class="mfield"><label>COLOR</label><input value="${u.color||''}" oninput="window._editStockUnits[${i}].color=this.value" placeholder="e.g. Black"></div>
+        <div class="mfield"><label>STORAGE</label><input value="${u.storage||''}" oninput="window._editStockUnits[${i}].storage=this.value" placeholder="e.g. 256GB"></div>
+        <div class="mfield"><label>SERIAL NUMBER</label><input value="${u.serial||''}" oninput="window._editStockUnits[${i}].serial=this.value" placeholder="SN..."></div>
+        <div class="mfield"><label>IMEI</label><input value="${u.imei||''}" oninput="window._editStockUnits[${i}].imei=this.value" placeholder="IMEI..."></div>
+      </div>
+      <div class="mfield"><label>CONDITION</label>
+        <select onchange="window._editStockUnits[${i}].condition=this.value">
+          ${['New','Used','Refurbished'].map(c=>`<option${u.condition===c?' selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+    </div>`).join('');
+}
+
+function removeEditStockUnit(idx){
+  if(!confirm('Remove this unit from the purchase? It will be deleted from inventory.'))return;
+  window._editStockUnits[idx]._delete=true;
+  renderEditStockUnits();
+  // Re-render excluding deleted
+  window._editStockUnits=window._editStockUnits.filter(u=>!u._delete);
+  renderEditStockUnits();
+}
+
 async function saveEditStock(id){
   const supplier=document.getElementById('esp_supplier')?.value?.trim();
   if(!supplier)return alert('Supplier name required');
-  const res=await api('PATCH','stock_purchases',{date:document.getElementById('esp_date')?.value,purchase_id:document.getElementById('esp_pid')?.value,supplier_name:supplier,notes:document.getElementById('esp_notes')?.value?.trim()||''},`id=eq.${id}`);
-  if(!res)return alert('Save failed');
+  const date=document.getElementById('esp_date')?.value;
+  const pid=document.getElementById('esp_pid')?.value;
+  const notes=document.getElementById('esp_notes')?.value?.trim()||'';
+  const units=window._editStockUnits||[];
+  // Recalculate total cost
+  const totalCost=units.reduce((a,u)=>a+Number(u.cost_price||0),0);
+  // Save purchase header
+  const res=await api('PATCH','stock_purchases',{date,purchase_id:pid,supplier_name:supplier,notes,total_cost:totalCost},`id=eq.${id}`);
+  if(!res)return alert('Save failed. Try again.');
+  // Save each unit update
+  for(const u of units){
+    const dev=D.devices.find(d=>String(d.id)===String(u.device_id));
+    await api('PATCH','inventory',{
+      device_id:u.device_id||null,
+      device_name:dev?.name||u.device_name||'',
+      category:dev?.category||u.category||'',
+      brand:dev?.brand||u.brand||'',
+      color:u.color||'',
+      storage:u.storage||'',
+      condition:u.condition||'New',
+      serial:u.serial||'',
+      imei:u.imei||'',
+      cost_price:Number(u.cost_price)||0,
+      date
+    },`id=eq.${u.id}`);
+  }
   closeModal();await loadAll();renderMain();
 }
 
