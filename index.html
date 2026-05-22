@@ -433,21 +433,32 @@ function rDash(){
   </div>
   <div class="two-col">
     <div class="card"><div class="card-title">⚠️ Low Stock</div>
-      ${low.length===0?'<div class="empty">All devices well stocked ✓</div>':low.map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}
+      ${low.length===0?'<div class="empty">All devices well stocked ✓</div>':low.slice(0,4).map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}
+      ${low.length>4?`<div id="lowStockMore" style="display:none">${low.slice(4).map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}</div><button onclick="toggleMore('lowStockMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${low.length-4} more</button>`:''}
     </div>
     <div class="card"><div class="card-title">🔧 Active Repairs</div>
-      ${activeRep.length===0?'<div class="empty">No active repairs</div>':activeRep.slice(0,5).map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>`).join('')}
+      ${activeRep.length===0?'<div class="empty">No active repairs</div>':activeRep.slice(0,4).map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>`).join('')}
+      ${activeRep.length>4?`<div id="repairsMore" style="display:none">${activeRep.slice(4).map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':'badge-amber'}">${r.status}</span></div>`).join('')}</div><button onclick="toggleMore('repairsMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${activeRep.length-4} more</button>`:''}
     </div>
   </div>
   <div class="two-col">
     <div class="card" style="cursor:pointer" onclick="setTab('ledger')"><div class="card-title">📥 Customer Balances</div>
-      ${D.customers.length===0?'<div class="empty">No customers yet</div>':D.customers.slice(0,5).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+      ${D.customers.length===0?'<div class="empty">No customers yet</div>':D.customers.slice(0,4).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+      ${D.customers.length>4?`<div id="custBalMore" style="display:none">${D.customers.slice(4).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}</div><button onclick="toggleMore('custBalMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${D.customers.length-4} more</button>`:''}
     </div>
     <div class="card" style="cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="card-title">📤 Supplier Balances</div>
-      ${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':D.suppliers.slice(0,5).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+      ${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':D.suppliers.slice(0,4).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+      ${D.suppliers.length>4?`<div id="suppBalMore" style="display:none">${D.suppliers.slice(4).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}</div><button onclick="toggleMore('suppBalMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${D.suppliers.length-4} more</button>`:''}
     </div>
   </div>
   </div>`;
+}
+function toggleMore(id,btn){
+  const el=document.getElementById(id);if(!el)return;
+  const hidden=el.style.display==='none';
+  el.style.display=hidden?'block':'none';
+  btn.textContent=hidden?'▲ Show less':`▼ See more`;
+}
 }
 
 // DEVICES
@@ -485,7 +496,7 @@ function rStock(){
   </div>
   ${D.stockPurchases.length===0?'<div class="empty">No purchases yet</div>':D.stockPurchases.map(s=>{
     const units=D.inventory.filter(i=>i.purchase_id==s.id);
-    return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="showPurchaseDetail(${s.id})">👁 View units</button><button class="iab" style="color:var(--red)" onclick="delPurchase(${s.id})">🗑</button></div></div>
+    return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="showPurchaseDetail(${s.id})">👁 View units</button><button class="iab" onclick="openEditStockModal(${s.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDelPurchase(${s.id})">🗑</button></div></div>
     <div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--red)">${fmt(s.total_cost)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${units.length} units</div></div></div>`;}).join('')}
   </div>`;
 }
@@ -724,9 +735,10 @@ function rLedger(){
             <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${balLabel}</div><div style="font-size:14px;font-weight:800;margin-top:2px;color:${balColor}">${fmt(Math.abs(bal.balance))}</div></div>
           </div>
           <div class="iacts">
-            <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" onclick="openPaymentModal(${isC?1:2},${x.id},${JSON.stringify(x.name)})">+ Record Payment</button>
-            <button class="iab" onclick="showLedgerDetail(${isC?1:2},${x.id},${JSON.stringify(x.name)})">📋 View History</button>
-            <button class="iab" onclick="printIndividualLedger(${isC?1:2},${x.id},${JSON.stringify(x.name)})">🖨 Print Report</button>
+            <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" data-action="pay" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">+ Record Payment</button>
+            <button class="iab" data-action="history" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">📋 View History</button>
+            <button class="iab" data-action="print" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">🖨 Print Report</button>
+            <button class="iab" style="color:var(--blue);border-color:var(--blue)" data-action="opening" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">📌 Opening Balance</button>
           </div>
         </div>
         <div style="text-align:right;min-width:100px">
@@ -736,6 +748,66 @@ function rLedger(){
       </div>`;
     }).join('')}
   </div>`;
+}
+
+// Ledger button dispatcher — avoids JSON.stringify in onclick
+function ldAction(btn){
+  const action=btn.dataset.action;
+  const type=Number(btn.dataset.type);
+  const id=Number(btn.dataset.id);
+  const name=btn.dataset.name;
+  if(action==='pay') openPaymentModal(type,id,name);
+  else if(action==='history') showLedgerDetail(type,id,name);
+  else if(action==='print') printIndividualLedger(type,id,name);
+  else if(action==='opening') openOpeningBalanceModal(type,id,name);
+}
+
+// Opening Balance modal
+function openOpeningBalanceModal(type,id,name){
+  const isC=type===1;
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px">
+    <h3>📌 Opening Balance — ${name}</h3>
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500;line-height:1.6">
+      ${isC?'💡 Use this to record amounts this customer owed you <b>before</b> you started using iVault. This will be added as debt to their ledger.':'💡 Use this to record amounts you owed this supplier <b>before</b> you started using iVault. This will be added as debt to their ledger.'}
+    </div>
+    <div class="mfield"><label>DATE (when this balance was owed from)</label><input type="date" id="ob_date" value="${today()}"></div>
+    <div class="mfield"><label>${isC?'AMOUNT CUSTOMER OWES YOU (RS.)':'AMOUNT YOU OWE SUPPLIER (RS.)'}</label><input type="number" id="ob_amount" placeholder="Enter opening balance amount..."></div>
+    <div class="mfield"><label>NOTE</label><input id="ob_note" placeholder="e.g. Balance brought forward from previous records" value="Opening balance brought forward"></div>
+    <div class="mbtns">
+      <button class="bsave" onclick="saveOpeningBalance(${type},${id},'${name.replace(/'/g,"\\'")}')">✓ Add Opening Balance</button>
+      <button class="bcancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div></div>`;
+  document.body.appendChild(div);
+}
+
+async function saveOpeningBalance(type,id,name){
+  const date=document.getElementById('ob_date')?.value||today();
+  const amount=Number(document.getElementById('ob_amount')?.value||0);
+  const note=document.getElementById('ob_note')?.value||'Opening balance brought forward';
+  if(!amount||amount<=0)return alert('Please enter a valid amount');
+  const isC=type===1;
+  // For customer: opening balance = they OWE us = it's like an invoice (debit)
+  // We record it as a negative payment (they "owe" = we add to bills concept via a special payment entry with negative)
+  // Cleanest: add as a special "opening" entry in payments with negative sign so it offsets
+  // Actually for customer: opening balance means we ADD to what they owe = record as invoice-type
+  // Best approach: add to customer_payments as a NEGATIVE (meaning they owe MORE) — simpler ledger
+  // For customer ledger: debit = invoice, credit = payment
+  // Opening balance customer owes = we add a fake "invoice" via a special flag
+  // Simplest clean way: store in payments table with amount as NEGATIVE for "opening debit"
+  const table=isC?'customer_payments':'supplier_payments';
+  const data={
+    user_id:CU.id,date,
+    amount:-Math.abs(amount), // negative = they owe (debit side)
+    payment_method:'Opening Balance',
+    note,
+    ...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})
+  };
+  const res=await api('POST',table,data);
+  if(!res)return alert('Save failed. Please try again.');
+  closeModal();await loadAll();renderMain();
 }
 
 function openPaymentModal(type,id,name){
@@ -784,7 +856,16 @@ function buildLedgerTimeline(type,id,name){
   const timeline=[];
   if(isC) bills.forEach(b=>timeline.push({date:b.date,type:'invoice',label:`Invoice ${b.id}`,debit:Number(b.total),credit:0}));
   else purchases.forEach(p=>timeline.push({date:p.date,type:'purchase',label:`Purchase ${p.purchase_id||p.id}`,debit:Number(p.total_cost),credit:0}));
-  payments.forEach(p=>timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,debit:0,credit:Number(p.amount),payId:p.id}));
+  payments.forEach(p=>{
+    const amt=Number(p.amount);
+    const isOpening=p.payment_method==='Opening Balance';
+    if(isOpening){
+      // negative amount = opening debit (they owe us / we owe them)
+      timeline.push({date:p.date,type:'opening',label:`📌 ${p.note||'Opening balance'}`,debit:Math.abs(amt),credit:0,payId:p.id});
+    } else {
+      timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,debit:0,credit:amt,payId:p.id});
+    }
+  });
   timeline.sort((a,b)=>new Date(a.date)-new Date(b.date));
   let running=0;
   return timeline.map(t=>{running+=t.debit-t.credit;return{...t,running};});
@@ -1507,38 +1588,79 @@ function showConfirm(msg,onYes){
   document.body.appendChild(div);
 }
 
-// EDIT BILL
+// EDIT BILL — full edit including items
 function openEditBillModal(id){
   const b=D.bills.find(x=>x.id===id);if(!b)return;
+  // load existing items into billItems
+  billItems=(b.items||[]).map(i=>({...i,sale_price:i.sale_price||i.price||0,search:i.device_name||i.name||''}));
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
     <h3>✏️ Edit Invoice — ${b.id}</h3>
-    <div class="mfield"><label>CUSTOMER NAME</label><input id="eb_cust" value="${b.customer_name||''}"></div>
-    <div class="mfield"><label>CUSTOMER PHONE</label><input id="eb_phone" value="${b.customer_phone||''}"></div>
-    <div class="mfield"><label>DATE</label><input type="date" id="eb_date" value="${b.date||today()}"></div>
-    <div class="mfield"><label>NOTES</label><textarea id="eb_notes" style="min-height:70px">${b.notes||''}</textarea></div>
+    <div class="tf">
+      <div class="mfield"><label>CUSTOMER NAME</label>
+        <div class="suggest-wrap">
+          <input id="bill_cust_name" value="${b.customer_name||''}" placeholder="Customer name..." oninput="filterSuggest('bill_cust_name','bill_cust_id',D.customers,'name','id')">
+          <input type="hidden" id="bill_cust_id" value="${b.customer_id||''}">
+          <div id="bill_cust_name_suggest" class="suggest-list" style="display:none"></div>
+        </div>
+      </div>
+      <div class="mfield"><label>CUSTOMER PHONE</label><input id="bill_cust_phone" value="${b.customer_phone||''}"></div>
+    </div>
+    <div class="mfield"><label>DATE</label><input type="date" id="bill_edit_date" value="${b.date||today()}"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:4px">Items — Search inventory by IMEI/Serial</div>
+    <div id="billItemsWrap"></div>
+    <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
+    <div class="mfield"><label>EXTRA NOTES</label><textarea id="bill_notes" style="min-height:60px">${b.notes||''}</textarea></div>
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div>
-      <div class="mfield"><label>STATUS</label><select id="eb_status" onchange="document.getElementById('eb_partial').style.display=this.value==='Partial'?'block':'none'">
-        <option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid — Full amount due</option>
-        <option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial — Paid some</option>
-        <option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared — Fully paid</option>
-      </select></div>
-      <div id="eb_partial" style="${b.pay_status==='Partial'?'':'display:none'}">
-        <div class="mfield"><label>AMOUNT PAID (RS.)</label><input type="number" id="eb_paid" value="${b.amount_paid||0}"></div>
+      <div class="mfield"><label>STATUS</label>
+        <select id="bill_pay_status" onchange="togglePaymentFields()">
+          <option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid — Full amount due</option>
+          <option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial — Customer paid some now</option>
+          <option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared — Fully paid</option>
+        </select>
+      </div>
+      <div id="partialPayFields" style="${b.pay_status==='Partial'?'':'display:none'}">
+        <div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="bill_amount_paid" value="${b.amount_paid||0}" oninput="updateBillBalance()"></div>
+        <div id="billBalanceRow" style="${Number(b.amount_paid)>0?'':'display:none'};background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px">
+          <div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE</div>
+          <div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">${fmt(Number(b.balance||0))}</div>
+        </div>
       </div>
     </div>
     <div class="mbtns"><button class="bsave" onclick="saveEditBill('${b.id}')">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
   </div></div>`;
   document.body.appendChild(div);
+  setTimeout(refreshBillItems,30);
 }
 async function saveEditBill(id){
   const b=D.bills.find(x=>x.id===id);if(!b)return;
-  const payStatus=document.getElementById('eb_status')?.value||'Unpaid';
-  const amtPaid=payStatus==='Cleared'?Number(b.total):payStatus==='Partial'?Number(document.getElementById('eb_paid')?.value||0):0;
-  const data={customer_name:document.getElementById('eb_cust')?.value?.trim()||b.customer_name,customer_phone:document.getElementById('eb_phone')?.value?.trim()||'',date:document.getElementById('eb_date')?.value||b.date,notes:document.getElementById('eb_notes')?.value?.trim()||'',pay_status:payStatus,amount_paid:amtPaid,balance:Number(b.total)-amtPaid};
-  const res=await api('PATCH','bills',data,`id=eq.${id}`);
+  const custName=document.getElementById('bill_cust_name')?.value?.trim()||b.customer_name;
+  const custPhone=document.getElementById('bill_cust_phone')?.value?.trim()||'';
+  const custId=document.getElementById('bill_cust_id')?.value||b.customer_id||null;
+  const date=document.getElementById('bill_edit_date')?.value||b.date;
+  const notes=document.getElementById('bill_notes')?.value?.trim()||'';
+  const payStatus=document.getElementById('bill_pay_status')?.value||'Unpaid';
+  // Read current prices from DOM
+  billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=Number(el.value)||0;});
+  const validItems=billItems.filter(item=>Number(item.sale_price)>0);
+  if(validItems.length===0)return alert('Add at least 1 item with a sale price');
+  const total=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
+  const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
+  const amtPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('bill_amount_paid')?.value||0):0;
+  const balance=total-amtPaid;
+  // First restore previously sold items that are being removed
+  const oldInvIds=(b.items||[]).map(i=>i.inv_id).filter(Boolean);
+  const newInvIds=validItems.map(i=>i.inv_id).filter(Boolean);
+  for(const oldId of oldInvIds){
+    if(!newInvIds.includes(oldId)) await api('PATCH','inventory',{status:'Available',sold_invoice:null},`id=eq.${oldId}`);
+  }
+  // Mark new items as sold
+  for(const item of validItems){
+    if(item.inv_id&&!oldInvIds.includes(item.inv_id)) await api('PATCH','inventory',{status:'Sold',sold_invoice:id},`id=eq.${item.inv_id}`);
+  }
+  const res=await api('PATCH','bills',{customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date,items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amtPaid,balance},`id=eq.${id}`);
   if(!res)return alert('Save failed. Try again.');
   closeModal();await loadAll();renderMain();
 }
