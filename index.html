@@ -684,22 +684,29 @@ function rReports(){
 }
 
 // LEDGER
+// Ledger name store — avoids HTML encoding issues with special chars in names
+const _ldNames={};
+
 function rLedger(){
   const isC=ST.ledgerTab!=='suppliers';
   const list=isC?D.customers:D.suppliers;
   const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
   function custBalance(c){
     const totalBilled=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
-    const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);
-    return{totalBilled,totalPaid,balance:totalBilled-totalPaid};
+    const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id&&Number(p.amount)>0).reduce((a,p)=>a+Number(p.amount),0);
+    const openingDebit=D.customerPayments.filter(p=>p.customer_id==c.id&&p.payment_method==='Opening Balance').reduce((a,p)=>a+Math.abs(Number(p.amount)),0);
+    return{totalBilled,totalPaid,balance:(totalBilled+openingDebit)-totalPaid};
   }
   function suppBalance(s){
     const totalOwed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);
-    const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);
-    return{totalOwed,totalPaid,balance:totalOwed-totalPaid};
+    const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id&&Number(p.amount)>0).reduce((a,p)=>a+Number(p.amount),0);
+    const openingDebit=D.supplierPayments.filter(p=>p.supplier_id==s.id&&p.payment_method==='Opening Balance').reduce((a,p)=>a+Math.abs(Number(p.amount)),0);
+    return{totalOwed,totalPaid,balance:(totalOwed+openingDebit)-totalPaid};
   }
   const totalCustBalance=D.customers.reduce((a,c)=>{const b=custBalance(c);return a+b.balance;},0);
   const totalSuppBalance=D.suppliers.reduce((a,s)=>{const b=suppBalance(s);return a+b.balance;},0);
+  // store names in lookup map
+  [...D.customers,...D.suppliers].forEach(x=>{_ldNames[x.id]=x.name;});
   return`
   <div class="page-header"><h1>Ledger</h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -723,6 +730,7 @@ function rLedger(){
       const totalAmt=isC?bal.totalBilled:bal.totalOwed;
       const balColor=bal.balance>0?'var(--red)':bal.balance<0?'var(--green)':'var(--text3)';
       const balLabel=isC?(bal.balance>0?'Outstanding':'Overpaid'):(bal.balance>0?'You Owe':'Overpaid');
+      const t=isC?1:2;
       return`<div class="item-row">
         <div class="mi">
           <div style="display:flex;align-items:center;gap:10px">
@@ -735,10 +743,10 @@ function rLedger(){
             <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${balLabel}</div><div style="font-size:14px;font-weight:800;margin-top:2px;color:${balColor}">${fmt(Math.abs(bal.balance))}</div></div>
           </div>
           <div class="iacts">
-            <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" data-action="pay" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">+ Record Payment</button>
-            <button class="iab" data-action="history" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">📋 View History</button>
-            <button class="iab" data-action="print" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">🖨 Print Report</button>
-            <button class="iab" style="color:var(--blue);border-color:var(--blue)" data-action="opening" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">📌 Opening Balance</button>
+            <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" onclick="openPaymentModal(${t},${x.id},_ldNames[${x.id}])">+ Record Payment</button>
+            <button class="iab" onclick="showLedgerDetail(${t},${x.id},_ldNames[${x.id}])">📋 View History</button>
+            <button class="iab" onclick="printIndividualLedger(${t},${x.id},_ldNames[${x.id}])">🖨 Print Report</button>
+            <button class="iab" style="color:var(--blue);border-color:var(--blue)" onclick="openOpeningBalanceModal(${t},${x.id},_ldNames[${x.id}])">📌 Opening Balance</button>
           </div>
         </div>
         <div style="text-align:right;min-width:100px">
@@ -750,61 +758,41 @@ function rLedger(){
   </div>`;
 }
 
-// Ledger button dispatcher — avoids JSON.stringify in onclick
-function ldAction(btn){
-  const action=btn.dataset.action;
-  const type=Number(btn.dataset.type);
-  const id=Number(btn.dataset.id);
-  const name=btn.dataset.name;
-  if(action==='pay') openPaymentModal(type,id,name);
-  else if(action==='history') showLedgerDetail(type,id,name);
-  else if(action==='print') printIndividualLedger(type,id,name);
-  else if(action==='opening') openOpeningBalanceModal(type,id,name);
-}
+// Ledger name store populated in rLedger
 
 // Opening Balance modal
 function openOpeningBalanceModal(type,id,name){
   const isC=type===1;
+  window._obType=type;window._obId=id;window._obName=name;
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
   div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px">
     <h3>📌 Opening Balance — ${name}</h3>
     <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500;line-height:1.6">
-      ${isC?'💡 Use this to record amounts this customer owed you <b>before</b> you started using iVault. This will be added as debt to their ledger.':'💡 Use this to record amounts you owed this supplier <b>before</b> you started using iVault. This will be added as debt to their ledger.'}
+      ${isC?'💡 Record the amount this customer owed you <b>before</b> using iVault. Adds to their outstanding balance.':'💡 Record the amount you owed this supplier <b>before</b> using iVault. Adds to their outstanding balance.'}
     </div>
-    <div class="mfield"><label>DATE (when this balance was owed from)</label><input type="date" id="ob_date" value="${today()}"></div>
+    <div class="mfield"><label>DATE (when balance was owed from)</label><input type="date" id="ob_date" value="${today()}"></div>
     <div class="mfield"><label>${isC?'AMOUNT CUSTOMER OWES YOU (RS.)':'AMOUNT YOU OWE SUPPLIER (RS.)'}</label><input type="number" id="ob_amount" placeholder="Enter opening balance amount..."></div>
-    <div class="mfield"><label>NOTE</label><input id="ob_note" placeholder="e.g. Balance brought forward from previous records" value="Opening balance brought forward"></div>
+    <div class="mfield"><label>NOTE</label><input id="ob_note" value="Opening balance brought forward"></div>
     <div class="mbtns">
-      <button class="bsave" onclick="saveOpeningBalance(${type},${id},'${name.replace(/'/g,"\\'")}')">✓ Add Opening Balance</button>
+      <button class="bsave" onclick="saveOpeningBalance()">✓ Add Opening Balance</button>
       <button class="bcancel" onclick="closeModal()">Cancel</button>
     </div>
   </div></div>`;
   document.body.appendChild(div);
 }
 
-async function saveOpeningBalance(type,id,name){
+async function saveOpeningBalance(){
+  const type=window._obType;const id=window._obId;const name=window._obName;
   const date=document.getElementById('ob_date')?.value||today();
   const amount=Number(document.getElementById('ob_amount')?.value||0);
   const note=document.getElementById('ob_note')?.value||'Opening balance brought forward';
-  if(!amount||amount<=0)return alert('Please enter a valid amount');
+  if(!amount||amount<=0)return alert('Please enter a valid amount greater than 0');
   const isC=type===1;
-  // For customer: opening balance = they OWE us = it's like an invoice (debit)
-  // We record it as a negative payment (they "owe" = we add to bills concept via a special payment entry with negative)
-  // Cleanest: add as a special "opening" entry in payments with negative sign so it offsets
-  // Actually for customer: opening balance means we ADD to what they owe = record as invoice-type
-  // Best approach: add to customer_payments as a NEGATIVE (meaning they owe MORE) — simpler ledger
-  // For customer ledger: debit = invoice, credit = payment
-  // Opening balance customer owes = we add a fake "invoice" via a special flag
-  // Simplest clean way: store in payments table with amount as NEGATIVE for "opening debit"
   const table=isC?'customer_payments':'supplier_payments';
-  const data={
-    user_id:CU.id,date,
-    amount:-Math.abs(amount), // negative = they owe (debit side)
-    payment_method:'Opening Balance',
-    note,
-    ...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})
-  };
+  // Opening balance stored as negative amount with method 'Opening Balance'
+  // In timeline: negative payment = debit (they owe us / we owe them)
+  const data={user_id:CU.id,date,amount:-Math.abs(amount),payment_method:'Opening Balance',note,...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})};
   const res=await api('POST',table,data);
   if(!res)return alert('Save failed. Please try again.');
   closeModal();await loadAll();renderMain();
