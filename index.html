@@ -176,8 +176,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .theme-btn{flex:1;padding:16px;border:2px solid var(--border);border-radius:12px;background:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--text2);transition:all .15s;text-align:center}
 .theme-btn.active{border-color:var(--orange);color:var(--orange);background:var(--orange-bg)}
 .divider{height:1px;background:var(--border);margin:16px 0}
-.see-more-btn{width:100%;padding:8px;background:none;border:none;border-top:1px solid var(--border);color:var(--orange);font-size:12px;font-weight:700;cursor:pointer;margin-top:4px;border-radius:0 0 10px 10px}
-.see-more-btn:hover{background:var(--bg3)}
 
 @media(max-width:700px){
   .hamburger{display:block}
@@ -278,7 +276,7 @@ function avatarColor(name){let h=0;for(let c of(name||''))h=c.charCodeAt(0)+((h<
 function initials(name){return(name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
 
 let CU=null,CS=null,THEME='dark';
-let ST={tab:'dashboard',peopleTab:'customers',ledgerTab:'customers',search:'',editId:null,form:{},billDetail:null,settingsTab:'company',dashExpanded:{}};
+let ST={tab:'dashboard',peopleTab:'customers',ledgerTab:'customers',search:'',editId:null,form:{},billDetail:null,settingsTab:'company'};
 let D={devices:[],stockPurchases:[],inventory:[],customers:[],suppliers:[],bills:[],expenses:[],repairs:[],customerPayments:[],supplierPayments:[],settings:null};
 let stockUnits=[],billItems=[];
 
@@ -381,7 +379,6 @@ async function loadAll(){
   D.expenses=g||[];D.repairs=h||[];
   D.customerPayments=cp||[];D.supplierPayments=sp||[];
   D.settings=s&&s[0]?s[0]:{company_name:'iVault',address:'',phone:'',email:'',bank1_name:'HBL',bank1_acc:'',bank1_title:'',bank2_name:'Meezan Bank',bank2_acc:'',bank2_title:''};
-  if(!D.settings.opening_balances) D.settings.opening_balances={};
 }
 
 const fmt=n=>'Rs. '+Number(n||0).toLocaleString();
@@ -398,17 +395,7 @@ function renderMain(){
   document.getElementById('main').innerHTML=(pages[ST.tab]||rDash)();
 }
 
-// ========== FIX 1 – DASHBOARD "SEE MORE" ==========
-function getOpeningBalance(type, id) {
-  const key = (type===1?'cust_':'supp_') + id;
-  const ob = D.settings?.opening_balances || {};
-  return Number(ob[key] || 0);
-}
-function toggleDashSection(key) {
-  ST.dashExpanded[key] = !ST.dashExpanded[key];
-  renderMain();
-}
-
+// DASHBOARD
 function rDash(){
   const avail=D.inventory.filter(i=>i.status==='Available').length;
   const sold=D.inventory.filter(i=>i.status==='Sold').length;
@@ -416,94 +403,174 @@ function rDash(){
   const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const net=prof-exp;
+  // ledger totals
   const totalCustOwed=D.customers.reduce((a,c)=>{
-    const ob=getOpeningBalance(1,c.id);
     const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((x,b)=>x+Number(b.total),0);
     const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((x,p)=>x+Number(p.amount),0);
-    return a+Math.max(0,ob+billed-paid);
+    return a+Math.max(0,billed-paid);
   },0);
   const totalSuppOwed=D.suppliers.reduce((a,s)=>{
-    const ob=getOpeningBalance(2,s.id);
     const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((x,p)=>x+Number(p.total_cost),0);
     const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((x,p)=>x+Number(p.amount),0);
-    return a+Math.max(0,ob+owed-paid);
+    return a+Math.max(0,owed-paid);
   },0);
   const low=D.devices.filter(d=>D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length<=2);
   const activeRep=D.repairs.filter(r=>r.status!=='Delivered');
-  const LIMIT=4;
-
-  const lowExpanded=ST.dashExpanded['low'];
-  const lowShow=lowExpanded?low:low.slice(0,LIMIT);
-  const lowCard=`<div class="card"><div class="card-title">⚠️ Low Stock</div>${low.length===0?'<div class="empty">All devices well stocked ✓</div>':lowShow.map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}${low.length>LIMIT?`<button class="see-more-btn" onclick="toggleDashSection('low')">${lowExpanded?'▲ Show less':'▼ Show '+(low.length-LIMIT)+' more'}</button>`:''}</div>`;
-
-  const repExpanded=ST.dashExpanded['rep'];
-  const repShow=repExpanded?activeRep:activeRep.slice(0,LIMIT);
-  const repCard=`<div class="card"><div class="card-title">🔧 Active Repairs</div>${activeRep.length===0?'<div class="empty">No active repairs</div>':repShow.map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>`).join('')}${activeRep.length>LIMIT?`<button class="see-more-btn" onclick="toggleDashSection('rep')">${repExpanded?'▲ Show less':'▼ Show '+(activeRep.length-LIMIT)+' more'}</button>`:''}</div>`;
-
-  const custBalList=D.customers.map(c=>{
-    const ob=getOpeningBalance(1,c.id);
-    const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
-    const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);
-    return{c,bal:ob+billed-paid,billed:ob+billed};
-  });
-  const custExpanded=ST.dashExpanded['cust'];
-  const custShow=custExpanded?custBalList:custBalList.slice(0,LIMIT);
-  const custCard=`<div class="card" style="cursor:pointer" onclick="setTab('ledger')"><div class="card-title">📥 Customer Balances</div>${D.customers.length===0?'<div class="empty">No customers yet</div>':custShow.map(({c,bal,billed})=>`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`).join('')}${custBalList.length>LIMIT?`<button class="see-more-btn" onclick="event.stopPropagation();toggleDashSection('cust')">${custExpanded?'▲ Show less':'▼ Show '+(custBalList.length-LIMIT)+' more'}</button>`:''}</div>`;
-
-  const suppBalList=D.suppliers.map(s=>{
-    const ob=getOpeningBalance(2,s.id);
-    const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);
-    const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);
-    return{s,bal:ob+owed-paid,owed:ob+owed};
-  });
-  const suppExpanded=ST.dashExpanded['supp'];
-  const suppShow=suppExpanded?suppBalList:suppBalList.slice(0,LIMIT);
-  const suppCard=`<div class="card" style="cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="card-title">📤 Supplier Balances</div>${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':suppShow.map(({s,bal,owed})=>`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`).join('')}${suppBalList.length>LIMIT?`<button class="see-more-btn" onclick="event.stopPropagation();toggleDashSection('supp')">${suppExpanded?'▲ Show less':'▼ Show '+(suppBalList.length-LIMIT)+' more'}</button>`:''}</div>`;
-
-  return`<div class="page-header"><h1>Dashboard</h1><div style="font-size:13px;color:var(--text3);font-weight:500">${D.settings?.company_name||'iVault'}</div></div><div class="page-content"><div class="metric-grid"><div class="metric-card"><div class="mc-label">Available Units</div><div class="mc-val white">${avail}</div></div><div class="metric-card"><div class="mc-label">Revenue</div><div class="mc-val green">${fmtK(rev)}</div></div><div class="metric-card"><div class="mc-label">Expenses</div><div class="mc-val red">${fmtK(exp)}</div></div><div class="metric-card"><div class="mc-label">Net Profit</div><div class="mc-val ${net>=0?'amber':'red'}">${fmtK(net)}</div></div></div><div class="metric-grid"><div class="metric-card"><div class="mc-label">Units Sold</div><div class="mc-val orange">${sold}</div></div><div class="metric-card"><div class="mc-label">Gross Profit</div><div class="mc-val green">${fmtK(prof)}</div></div><div class="metric-card" style="border-color:rgba(34,197,94,0.3);cursor:pointer" onclick="setTab('ledger')"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmtK(totalCustOwed)}</div></div><div class="metric-card" style="border-color:rgba(239,68,68,0.3);cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="mc-label">You Owe Suppliers</div><div class="mc-val red">${fmtK(totalSuppOwed)}</div></div></div><div class="two-col">${lowCard}${repCard}</div><div class="two-col">${custCard}${suppCard}</div></div>`;
+  return`
+  <div class="page-header"><h1>Dashboard</h1><div style="font-size:13px;color:var(--text3);font-weight:500">${D.settings?.company_name||'iVault'}</div></div>
+  <div class="page-content">
+  <div class="metric-grid">
+    <div class="metric-card"><div class="mc-label">Available Units</div><div class="mc-val white">${avail}</div></div>
+    <div class="metric-card"><div class="mc-label">Revenue</div><div class="mc-val green">${fmtK(rev)}</div></div>
+    <div class="metric-card"><div class="mc-label">Expenses</div><div class="mc-val red">${fmtK(exp)}</div></div>
+    <div class="metric-card"><div class="mc-label">Net Profit</div><div class="mc-val ${net>=0?'amber':'red'}">${fmtK(net)}</div></div>
+  </div>
+  <div class="metric-grid">
+    <div class="metric-card"><div class="mc-label">Units Sold</div><div class="mc-val orange">${sold}</div></div>
+    <div class="metric-card"><div class="mc-label">Gross Profit</div><div class="mc-val green">${fmtK(prof)}</div></div>
+    <div class="metric-card" style="border-color:rgba(34,197,94,0.3);cursor:pointer" onclick="setTab('ledger')"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmtK(totalCustOwed)}</div></div>
+    <div class="metric-card" style="border-color:rgba(239,68,68,0.3);cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="mc-label">You Owe Suppliers</div><div class="mc-val red">${fmtK(totalSuppOwed)}</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card"><div class="card-title">⚠️ Low Stock</div>
+      ${low.length===0?'<div class="empty">All devices well stocked ✓</div>':low.slice(0,4).map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}
+      ${low.length>4?`<div id="lowStockMore" style="display:none">${low.slice(4).map(d=>{const cnt=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;return`<div class="ri"><div><div style="font-weight:700">${d.name}</div><div style="font-size:11px;color:var(--text3)">${d.category}</div></div><span class="badge badge-red">${cnt} left</span></div>`;}).join('')}</div><button onclick="toggleMore('lowStockMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${low.length-4} more</button>`:''}
+    </div>
+    <div class="card"><div class="card-title">🔧 Active Repairs</div>
+      ${activeRep.length===0?'<div class="empty">No active repairs</div>':activeRep.slice(0,4).map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>`).join('')}
+      ${activeRep.length>4?`<div id="repairsMore" style="display:none">${activeRep.slice(4).map(r=>`<div class="ri"><div><div style="font-weight:700">${r.job_id} — ${r.device}</div><div style="font-size:11px;color:var(--text3)">${r.customer}</div></div><span class="badge ${r.status==='Ready'?'badge-green':'badge-amber'}">${r.status}</span></div>`).join('')}</div><button onclick="toggleMore('repairsMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${activeRep.length-4} more</button>`:''}
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="card" style="cursor:pointer" onclick="setTab('ledger')"><div class="card-title">📥 Customer Balances</div>
+      ${D.customers.length===0?'<div class="empty">No customers yet</div>':D.customers.slice(0,4).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+      ${D.customers.length>4?`<div id="custBalMore" style="display:none">${D.customers.slice(4).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}</div><button onclick="toggleMore('custBalMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${D.customers.length-4} more</button>`:''}
+    </div>
+    <div class="card" style="cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="card-title">📤 Supplier Balances</div>
+      ${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':D.suppliers.slice(0,4).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
+      ${D.suppliers.length>4?`<div id="suppBalMore" style="display:none">${D.suppliers.slice(4).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}</div><button onclick="toggleMore('suppBalMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${D.suppliers.length-4} more</button>`:''}
+    </div>
+  </div>
+  </div>`;
+}
+function toggleMore(id,btn){
+  const el=document.getElementById(id);if(!el)return;
+  const hidden=el.style.display==='none';
+  el.style.display=hidden?'block':'none';
+  btn.textContent=hidden?'▲ Show less':`▼ See more`;
+}
 }
 
 // DEVICES
 function rDevices(){
   const filtered=D.devices.filter(d=>(d.name||'').toLowerCase().includes(ST.search.toLowerCase()));
-  return`<div class="page-header"><h1>Device Catalog</h1><button class="btn-orange" onclick="openModal('device',null)">+ Add Device</button></div><div class="page-content"><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Add device models once. Serial/IMEI are added during stock purchases.</p><input class="plain-search" id="devSearch" placeholder="Search devices..." value="${ST.search}" oninput="ST.search=this.value;refilter('devices')"><div id="devList">${renderDeviceList(filtered)}</div></div>`;
+  return`
+  <div class="page-header"><h1>Device Catalog</h1><button class="btn-orange" onclick="openModal('device',null)">+ Add Device</button></div>
+  <div class="page-content">
+  <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Add device models once. Serial/IMEI are added during stock purchases.</p>
+  <input class="plain-search" id="devSearch" placeholder="Search devices..." value="${ST.search}" oninput="ST.search=this.value;refilter('devices')">
+  <div id="devList">${renderDeviceList(filtered)}</div>
+  </div>`;
 }
 function renderDeviceList(filtered){
   if(!filtered)filtered=D.devices.filter(d=>(d.name||'').toLowerCase().includes(ST.search.toLowerCase()));
   if(filtered.length===0)return'<div class="empty">No devices yet. Add your first device model.</div>';
-  return filtered.map(d=>{const avail=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;const sold=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Sold').length;return`<div class="item-row"><div class="mi"><div class="iname">${d.name}</div><div class="isub">${d.brand} · ${d.category} · Base cost: ${fmt(d.base_cost)}</div>${d.notes?`<div class="isub" style="font-style:italic">${d.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="openModal('device',${d.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDel('devices',${d.id})">🗑 Delete</button></div></div><div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--green)">${avail}</div><div style="font-size:11px;color:var(--text3)">available</div><div style="font-size:13px;font-weight:600;color:var(--text3);margin-top:4px">${sold} sold</div></div></div>`;}).join('');
+  return filtered.map(d=>{
+    const avail=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length;
+    const sold=D.inventory.filter(i=>i.device_id==d.id&&i.status==='Sold').length;
+    return`<div class="item-row"><div class="mi"><div class="iname">${d.name}</div><div class="isub">${d.brand} · ${d.category} · Base cost: ${fmt(d.base_cost)}</div>${d.notes?`<div class="isub" style="font-style:italic">${d.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="openModal('device',${d.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDel('devices',${d.id})">🗑 Delete</button></div></div>
+    <div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--green)">${avail}</div><div style="font-size:11px;color:var(--text3)">available</div><div style="font-size:13px;font-weight:600;color:var(--text3);margin-top:4px">${sold} sold</div></div></div>`;}).join('');
 }
 
 // STOCK PURCHASES
 function rStock(){
   const total=D.stockPurchases.reduce((a,s)=>a+Number(s.total_cost),0);
-  return`<div class="page-header"><h1>Stock Purchases</h1><button class="btn-orange" onclick="openStockModal()">+ New Purchase</button></div><div class="page-content"><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Record stock from suppliers. Each unit gets its own serial/IMEI and goes to Inventory automatically.</p><div class="metric-grid" style="grid-template-columns:repeat(3,1fr)"><div class="metric-card"><div class="mc-label">Purchases</div><div class="mc-val white">${D.stockPurchases.length}</div></div><div class="metric-card"><div class="mc-label">Total Invested</div><div class="mc-val red">${fmtK(total)}</div></div><div class="metric-card"><div class="mc-label">Units Received</div><div class="mc-val blue">${D.inventory.length}</div></div></div>${D.stockPurchases.length===0?'<div class="empty">No purchases yet</div>':D.stockPurchases.map(s=>{const units=D.inventory.filter(i=>i.purchase_id==s.id);return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="showPurchaseDetail(${s.id})">👁 View units</button><button class="iab" onclick="openEditStockModal(${s.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDelPurchase(${s.id})">🗑 Delete</button></div></div><div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--red)">${fmt(s.total_cost)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${units.length} units</div></div></div>`;}).join('')}</div>`;
+  return`
+  <div class="page-header"><h1>Stock Purchases</h1><button class="btn-orange" onclick="openStockModal()">+ New Purchase</button></div>
+  <div class="page-content">
+  <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Record stock from suppliers. Each unit gets its own serial/IMEI and goes to Inventory automatically.</p>
+  <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="metric-card"><div class="mc-label">Purchases</div><div class="mc-val white">${D.stockPurchases.length}</div></div>
+    <div class="metric-card"><div class="mc-label">Total Invested</div><div class="mc-val red">${fmtK(total)}</div></div>
+    <div class="metric-card"><div class="mc-label">Units Received</div><div class="mc-val blue">${D.inventory.length}</div></div>
+  </div>
+  ${D.stockPurchases.length===0?'<div class="empty">No purchases yet</div>':D.stockPurchases.map(s=>{
+    const units=D.inventory.filter(i=>i.purchase_id==s.id);
+    return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="showPurchaseDetail(${s.id})">👁 View units</button><button class="iab" onclick="openEditStockModal(${s.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDelPurchase(${s.id})">🗑</button></div></div>
+    <div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--red)">${fmt(s.total_cost)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${units.length} units</div></div></div>`;}).join('')}
+  </div>`;
 }
 
 // INVENTORY
 function rInventory(){
-  const filtered=D.inventory.filter(i=>(i.serial||'').toLowerCase().includes(ST.search.toLowerCase())||(i.imei||'').toLowerCase().includes(ST.search.toLowerCase())||(i.device_name||'').toLowerCase().includes(ST.search.toLowerCase()));
-  return`<div class="page-header"><h1>Inventory</h1></div><div class="page-content"><div class="metric-grid" style="grid-template-columns:repeat(3,1fr)"><div class="metric-card"><div class="mc-label">Total Units</div><div class="mc-val white">${D.inventory.length}</div></div><div class="metric-card"><div class="mc-label">Available</div><div class="mc-val green">${D.inventory.filter(i=>i.status==='Available').length}</div></div><div class="metric-card"><div class="mc-label">Sold</div><div class="mc-val orange">${D.inventory.filter(i=>i.status==='Sold').length}</div></div></div><input class="plain-search" id="invSearch" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;refilter('inventory')"><div id="invList">${renderInventoryList(filtered)}</div></div>`;
+  const filtered=D.inventory.filter(i=>
+    (i.serial||'').toLowerCase().includes(ST.search.toLowerCase())||
+    (i.imei||'').toLowerCase().includes(ST.search.toLowerCase())||
+    (i.device_name||'').toLowerCase().includes(ST.search.toLowerCase())
+  );
+  return`
+  <div class="page-header"><h1>Inventory</h1></div>
+  <div class="page-content">
+  <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="metric-card"><div class="mc-label">Total Units</div><div class="mc-val white">${D.inventory.length}</div></div>
+    <div class="metric-card"><div class="mc-label">Available</div><div class="mc-val green">${D.inventory.filter(i=>i.status==='Available').length}</div></div>
+    <div class="metric-card"><div class="mc-label">Sold</div><div class="mc-val orange">${D.inventory.filter(i=>i.status==='Sold').length}</div></div>
+  </div>
+  <input class="plain-search" id="invSearch" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;refilter('inventory')">
+  <div id="invList">${renderInventoryList(filtered)}</div>
+  </div>`;
 }
 function renderInventoryList(filtered){
   if(!filtered)filtered=D.inventory.filter(i=>(i.serial||'').toLowerCase().includes(ST.search.toLowerCase())||(i.imei||'').toLowerCase().includes(ST.search.toLowerCase())||(i.device_name||'').toLowerCase().includes(ST.search.toLowerCase()));
   if(filtered.length===0)return'<div class="empty">No inventory found</div>';
-  return filtered.map(i=>`<div class="item-row"><div class="mi"><div class="iname">${i.device_name||'Unknown'}</div><div class="isub">${[i.color,i.storage,i.condition].filter(Boolean).join(' · ')}</div>${i.serial?`<div class="isub">Serial: <b>${i.serial}</b></div>`:''}${i.imei?`<div class="isub">IMEI: <b>${i.imei}</b></div>`:''}<div class="isub">Cost: ${fmt(i.cost_price)} · ${i.date||''}</div></div><div style="text-align:right"><span class="badge ${i.status==='Available'?'badge-green':'badge-purple'}">${i.status}</span>${i.status==='Sold'?`<div style="font-size:10px;color:var(--text3);margin-top:5px">${i.sold_invoice||''}</div>`:''}</div></div>`).join('');
+  return filtered.map(i=>`
+    <div class="item-row"><div class="mi"><div class="iname">${i.device_name||'Unknown'}</div>
+      <div class="isub">${[i.color,i.storage,i.condition].filter(Boolean).join(' · ')}</div>
+      ${i.serial?`<div class="isub">Serial: <b>${i.serial}</b></div>`:''}
+      ${i.imei?`<div class="isub">IMEI: <b>${i.imei}</b></div>`:''}
+      <div class="isub">Cost: ${fmt(i.cost_price)} · ${i.date||''}</div>
+    </div><div style="text-align:right"><span class="badge ${i.status==='Available'?'badge-green':'badge-purple'}">${i.status}</span>${i.status==='Sold'?`<div style="font-size:10px;color:var(--text3);margin-top:5px">${i.sold_invoice||''}</div>`:''}</div></div>`).join('');
 }
 
-// PEOPLE
+// PEOPLE — TABLE STYLE like inspiration
 function rPeople(){
   const isC=ST.peopleTab==='customers';
   const list=isC?D.customers:D.suppliers;
   const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase())||(x.phone||'').toLowerCase().includes(ST.search.toLowerCase())||(x.email||'').toLowerCase().includes(ST.search.toLowerCase()));
-  return`<div class="page-header"><h1>Customers & Suppliers</h1><button class="btn-orange" onclick="openModal('cust',null)">+ Add Customer</button><button class="btn-orange" style="margin-left:8px" onclick="openModal('supp',null)">+ Add Supplier</button></div><div class="page-content"><div class="tab-row"><button class="tab-btn${isC?' active':''}" onclick="ST.peopleTab='customers';ST.search='';renderMain()">Customers (${D.customers.length})</button><button class="tab-btn${!isC?' active':''}" onclick="ST.peopleTab='suppliers';ST.search='';renderMain()">Suppliers (${D.suppliers.length})</button></div><div class="search-wrap"><input id="peopleSearch" placeholder="Search by name, email, or phone..." value="${ST.search}" oninput="ST.search=this.value;refilter('people')"></div><div class="card" style="padding:0;overflow:hidden" id="peopleList">${renderPeopleList(filtered,isC)}</div></div>`;
+  return`
+  <div class="page-header"><h1>Customers & Suppliers</h1><button class="btn-orange" onclick="openModal(isC?'cust':'supp',null)">+ Add ${isC?'Customer':'Supplier'}</button></div>
+  <div class="page-content">
+  <div class="tab-row">
+    <button class="tab-btn${isC?' active':''}" onclick="ST.peopleTab='customers';ST.search='';renderMain()">Customers (${D.customers.length})</button>
+    <button class="tab-btn${!isC?' active':''}" onclick="ST.peopleTab='suppliers';ST.search='';renderMain()">Suppliers (${D.suppliers.length})</button>
+  </div>
+  <div class="search-wrap"><input id="peopleSearch" placeholder="Search by name, email, or phone..." value="${ST.search}" oninput="ST.search=this.value;refilter('people')"></div>
+  <div class="card" style="padding:0;overflow:hidden" id="peopleList">
+    ${renderPeopleList(filtered,isC)}
+  </div>
+  </div>`;
 }
 function renderPeopleList(filtered,isC){
   if(isC===undefined)isC=ST.peopleTab==='customers';
   if(!filtered){const list=isC?D.customers:D.suppliers;filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase())||(x.phone||'').toLowerCase().includes(ST.search.toLowerCase())||(x.email||'').toLowerCase().includes(ST.search.toLowerCase()));}
   if(filtered.length===0)return`<div class="empty">No ${isC?'customers':'suppliers'} found</div>`;
-  return`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Contact</th>${isC?'<th>Type</th>':''}<th>City</th><th>Actions</th></tr></thead><tbody>${filtered.map(x=>{const color=avatarColor(x.name);const init=initials(x.name);return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div class="person-avatar" style="background:${color}">${init}</div><div><div style="font-weight:700">${x.name}</div></div></div></td><td><div style="font-size:12px">${x.email||'—'}</div><div style="font-size:12px;color:var(--text3)">${x.phone||'—'}</div></td>${isC?`<td><span class="badge ${x.type==='Wholesale'?'badge-amber':'badge-blue'}">${x.type||'Retail'}</span></td>`:''}<td style="color:var(--text2)">${x.city||'—'}</td><td><div style="display:flex;gap:6px"><button class="iab" onclick="openModal('${isC?'cust':'supp'}',${x.id})">✏️</button><button class="iab" style="color:var(--red)" onclick="confirmDel('${isC?'customers':'suppliers'}',${x.id})">🗑</button></div></td></tr>`;}).join('')}</tbody></table></div>`;
+  return`<div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Name</th><th>Contact</th>${isC?'<th>Type</th>':''}<th>City</th><th>Actions</th></tr></thead>
+    <tbody>${filtered.map(x=>{
+      const color=avatarColor(x.name);const init=initials(x.name);
+      return`<tr>
+        <td><div style="display:flex;align-items:center;gap:10px"><div class="person-avatar" style="background:${color}">${init}</div><div><div style="font-weight:700">${x.name}</div></div></div></td>
+        <td><div style="font-size:12px">${x.email||'—'}</div><div style="font-size:12px;color:var(--text3)">${x.phone||'—'}</div></td>
+        ${isC?`<td><span class="badge ${x.type==='Wholesale'?'badge-amber':'badge-blue'}">${x.type||'Retail'}</span></td>`:''}
+        <td style="color:var(--text2)">${x.city||'—'}</td>
+        <td><div style="display:flex;gap:6px"><button class="iab" onclick="openModal('${isC?'cust':'supp'}',${x.id})">✏️</button><button class="iab" style="color:var(--red)" onclick="confirmDel('${isC?'customers':'suppliers'}',${x.id})">🗑</button></div></td>
+      </tr>`;}).join('')}
+    </tbody></table></div>`;
 }
+// expose isC to onclick
+Object.defineProperty(window,'isC',{get:()=>ST.peopleTab==='customers'});
+
+// Refilter without full re-render — preserves focus
 function refilter(section){
   if(section==='devices'){const el=document.getElementById('devList');if(el)el.innerHTML=renderDeviceList();}
   else if(section==='inventory'){const el=document.getElementById('invList');if(el)el.innerHTML=renderInventoryList();}
@@ -513,24 +580,79 @@ function refilter(section){
 
 // BILLING
 function rBilling(){
-  return`<div class="page-header"><h1>Billing</h1><button class="btn-orange" onclick="openBillModal()">+ New Invoice</button></div><div class="page-content"><input class="plain-search" id="billSearch" placeholder="🔍 Search by invoice number or customer name..." value="${ST.search}" oninput="ST.search=this.value;refilter('billing')"><div id="billList">${renderBillList()}</div></div>`;
+  return`
+  <div class="page-header"><h1>Billing</h1><button class="btn-orange" onclick="openBillModal()">+ New Invoice</button></div>
+  <div class="page-content">
+  <input class="plain-search" id="billSearch" placeholder="🔍 Search by invoice number or customer name..." value="${ST.search}" oninput="ST.search=this.value;refilter('billing')">
+  <div id="billList">${renderBillList()}</div>
+  </div>`;
 }
 function renderBillList(){
   const filtered=D.bills.filter(b=>(b.id||'').toLowerCase().includes(ST.search.toLowerCase())||(b.customer_name||'').toLowerCase().includes(ST.search.toLowerCase()));
   if(filtered.length===0)return'<div class="empty">No invoices found</div>';
-  return`<div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead><tbody>${filtered.map(b=>{const bPaid=Number(b.amount_paid||0);const bal=Number(b.balance??Number(b.total)-bPaid);const status=b.pay_status||(bal<=0?'Cleared':bPaid>0?'Partial':'Unpaid');const statusColor=bal<=0?'badge-green':bPaid>0?'badge-amber':'badge-red';return`<tr><td style="color:var(--orange);font-weight:800;cursor:pointer" onclick="showBillDetail('${b.id}')">${b.id}</td><td style="font-weight:600">${b.customer_name}</td><td style="color:var(--text3)">${b.date}</td><td style="color:var(--green);font-weight:800">${fmt(b.total)}</td><td style="color:var(--green);font-weight:700">${fmt(bPaid)}</td><td style="color:${bal>0?'var(--red)':'var(--green)'};font-weight:700">${bal>0?fmt(bal):'✓'}</td><td><span class="badge ${statusColor}">${status}</span></td><td><div style="display:flex;gap:5px"><button class="iab" onclick="previewBill('${b.id}')">👁</button><button class="iab" onclick="openEditBillModal('${b.id}')">✏️</button><button class="iab" onclick="waBill('${b.id}')">💬</button><button class="iab" style="color:var(--red)" onclick="confirmDelBill('${b.id}')">🗑</button></div></td></tr>`;}).join('')}</tbody></table></div></div>`;
+  return`<div class="card" style="padding:0;overflow:hidden"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${filtered.map(b=>{
+      const bPaid=Number(b.amount_paid||0);
+      const bal=Number(b.balance??Number(b.total)-bPaid);
+      const status=b.pay_status||(bal<=0?'Cleared':bPaid>0?'Partial':'Unpaid');
+      const statusColor=bal<=0?'badge-green':bPaid>0?'badge-amber':'badge-red';
+      return`<tr>
+        <td style="color:var(--orange);font-weight:800;cursor:pointer" onclick="showBillDetail('${b.id}')">${b.id}</td>
+        <td style="font-weight:600">${b.customer_name}</td>
+        <td style="color:var(--text3)">${b.date}</td>
+        <td style="color:var(--green);font-weight:800">${fmt(b.total)}</td>
+        <td style="color:var(--green);font-weight:700">${fmt(bPaid)}</td>
+        <td style="color:${bal>0?'var(--red)':'var(--green)'};font-weight:700">${bal>0?fmt(bal):'✓'}</td>
+        <td><span class="badge ${statusColor}">${status}</span></td>
+        <td><div style="display:flex;gap:5px">
+          <button class="iab" onclick="previewBill('${b.id}')">👁</button>
+          <button class="iab" onclick="openEditBillModal('${b.id}')">✏️</button>
+          <button class="iab" onclick="waBill('${b.id}')">💬</button>
+          <button class="iab" style="color:var(--red)" onclick="confirmDelBill('${b.id}')">🗑</button>
+        </div></td>
+      </tr>`;}).join('')}
+    </tbody>
+  </table></div></div>`;
 }
 
 // EXPENSES
 function rExpenses(){
   const total=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
-  return`<div class="page-header"><h1>Expenses</h1><button class="btn-orange" onclick="openModal('expense',null)">+ Add Expense</button></div><div class="page-content"><div class="metric-grid" style="grid-template-columns:repeat(3,1fr)"><div class="metric-card"><div class="mc-label">Total</div><div class="mc-val red">${fmtK(total)}</div></div><div class="metric-card"><div class="mc-label">Entries</div><div class="mc-val white">${D.expenses.length}</div></div><div class="metric-card"><div class="mc-label">Categories</div><div class="mc-val white">${[...new Set(D.expenses.map(e=>e.category))].length}</div></div></div><div class="card" style="padding:0;overflow:hidden">${D.expenses.length===0?'<div class="empty">No expenses yet</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead><tbody>${D.expenses.map(e=>`<tr><td style="color:var(--text3)">${e.date}</td><td><span class="badge badge-amber">${e.category}</span></td><td>${e.description}</td><td style="color:var(--red);font-weight:800">${fmt(e.amount)}</td><td><div style="display:flex;gap:5px"><button class="iab" onclick="openModal('expense',${e.id})">✏️</button><button class="iab" style="color:var(--red)" onclick="delRow('expenses',${e.id})">🗑</button></div></td></tr>`).join('')}</tbody></table></div>`}</div></div>`;
+  return`
+  <div class="page-header"><h1>Expenses</h1><button class="btn-orange" onclick="openModal('expense',null)">+ Add Expense</button></div>
+  <div class="page-content">
+  <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="metric-card"><div class="mc-label">Total</div><div class="mc-val red">${fmtK(total)}</div></div>
+    <div class="metric-card"><div class="mc-label">Entries</div><div class="mc-val white">${D.expenses.length}</div></div>
+    <div class="metric-card"><div class="mc-label">Categories</div><div class="mc-val white">${[...new Set(D.expenses.map(e=>e.category))].length}</div></div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">${D.expenses.length===0?'<div class="empty">No expenses yet</div>':`
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+      <tbody>${D.expenses.map(e=>`<tr><td style="color:var(--text3)">${e.date}</td><td><span class="badge badge-amber">${e.category}</span></td><td>${e.description}</td><td style="color:var(--red);font-weight:800">${fmt(e.amount)}</td><td><div style="display:flex;gap:5px"><button class="iab" onclick="openModal('expense',${e.id})">✏️</button><button class="iab" style="color:var(--red)" onclick="delRow('expenses',${e.id})">🗑</button></div></td></tr>`).join('')}
+      </tbody></table></div>`}
+  </div>
+  </div>`;
 }
 
 // REPAIRS
 function rRepairs(){
   const statuses=['Pending','In Progress','Ready','Delivered'];
-  return`<div class="page-header"><h1>Repair Jobs</h1><button class="btn-orange" onclick="openModal('repair',null)">+ New Job</button></div><div class="page-content"><div class="metric-grid">${statuses.map(st=>`<div class="metric-card"><div class="mc-label">${st}</div><div class="mc-val white">${D.repairs.filter(r=>r.status===st).length}</div></div>`).join('')}</div>${D.repairs.length===0?'<div class="empty">No repair jobs yet</div>':D.repairs.map(r=>`<div class="item-row"><div class="mi"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="iname" style="color:var(--orange)">${r.job_id}</div><span class="badge ${r.status==='Delivered'?'badge-purple':r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div><div class="isub">${r.device} — ${r.issue||''}</div><div class="isub">${r.customer}${r.phone?' · '+r.phone:''} · ${r.date}</div>${r.notes?`<div class="isub" style="font-style:italic">${r.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="openModal('repair',${r.id})">✏️ Edit/Status</button><button class="iab" style="color:var(--red)" onclick="delRow('repairs',${r.id})">🗑</button></div></div><div style="text-align:right;min-width:80px"><div style="font-size:16px;font-weight:800;color:var(--green)">${fmt(r.charge)}</div><div style="font-size:11px;color:var(--text3)">charge</div></div></div>`).join('')}</div>`;
+  const cols=['badge-red','badge-amber','badge-green','badge-purple'];
+  return`
+  <div class="page-header"><h1>Repair Jobs</h1><button class="btn-orange" onclick="openModal('repair',null)">+ New Job</button></div>
+  <div class="page-content">
+  <div class="metric-grid">${statuses.map((st,i)=>`<div class="metric-card"><div class="mc-label">${st}</div><div class="mc-val white">${D.repairs.filter(r=>r.status===st).length}</div></div>`).join('')}</div>
+  ${D.repairs.length===0?'<div class="empty">No repair jobs yet</div>':D.repairs.map(r=>`
+    <div class="item-row"><div class="mi">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="iname" style="color:var(--orange)">${r.job_id}</div><span class="badge ${r.status==='Delivered'?'badge-purple':r.status==='Ready'?'badge-green':r.status==='In Progress'?'badge-amber':'badge-red'}">${r.status}</span></div>
+      <div class="isub">${r.device} — ${r.issue||''}</div>
+      <div class="isub">${r.customer}${r.phone?' · '+r.phone:''} · ${r.date}</div>
+      ${r.notes?`<div class="isub" style="font-style:italic">${r.notes}</div>`:''}
+      <div class="iacts"><button class="iab" onclick="openModal('repair',${r.id})">✏️ Edit/Status</button><button class="iab" style="color:var(--red)" onclick="delRow('repairs',${r.id})">🗑</button></div>
+    </div><div style="text-align:right;min-width:80px"><div style="font-size:16px;font-weight:800;color:var(--green)">${fmt(r.charge)}</div><div style="font-size:11px;color:var(--text3)">charge</div></div></div>`).join('')}
+  </div>`;
 }
 
 // REPORTS
@@ -541,61 +663,177 @@ function rReports(){
   const repRev=D.repairs.reduce((a,r)=>a+Number(r.charge),0);
   const net=prof+repRev-exp;
   const units=D.inventory.filter(i=>i.status==='Sold').length;
-  return`<div class="page-header"><h1>Reports</h1><div style="display:flex;gap:8px"><button class="btn-green" onclick="exportExcel()">📊 Excel</button><button class="btn-blue" onclick="exportPDF()">📄 PDF</button></div></div><div class="page-content"><div class="metric-grid"><div class="metric-card"><div class="mc-label">Units Sold</div><div class="mc-val white">${units}</div></div><div class="metric-card"><div class="mc-label">Sales Revenue</div><div class="mc-val green">${fmtK(rev)}</div></div><div class="metric-card"><div class="mc-label">Repair Revenue</div><div class="mc-val blue">${fmtK(repRev)}</div></div><div class="metric-card"><div class="mc-label">Expenses</div><div class="mc-val red">${fmtK(exp)}</div></div></div><div class="card" style="background:var(--green-bg);border-color:rgba(34,197,94,0.3);margin-bottom:16px"><div style="font-size:12px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Net Profit (after all expenses)</div><div style="font-size:32px;font-weight:800;color:var(--green)">${fmt(net)}</div></div><div class="two-col"><div class="card"><div class="card-title">Sales Invoices</div>${D.bills.length===0?'<div class="empty">No invoices</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice</th><th>Customer</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td style="color:var(--orange);font-weight:700">${b.id}</td><td>${b.customer_name}</td><td style="color:var(--green);font-weight:700">${fmt(b.total)}</td><td style="color:var(--amber);font-weight:700">${fmt(b.profit)}</td></tr>`).join('')}</tbody></table></div>`}</div><div class="card"><div class="card-title">Expenses</div>${D.expenses.length===0?'<div class="empty">No expenses</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>${D.expenses.map(e=>`<tr><td><span class="badge badge-amber">${e.category}</span></td><td>${e.description}</td><td style="color:var(--red);font-weight:700">${fmt(e.amount)}</td></tr>`).join('')}</tbody></table></div>`}</div></div></div>`;
+  return`
+  <div class="page-header"><h1>Reports</h1><div style="display:flex;gap:8px"><button class="btn-green" onclick="exportExcel()">📊 Excel</button><button class="btn-blue" onclick="exportPDF()">📄 PDF</button></div></div>
+  <div class="page-content">
+  <div class="metric-grid">
+    <div class="metric-card"><div class="mc-label">Units Sold</div><div class="mc-val white">${units}</div></div>
+    <div class="metric-card"><div class="mc-label">Sales Revenue</div><div class="mc-val green">${fmtK(rev)}</div></div>
+    <div class="metric-card"><div class="mc-label">Repair Revenue</div><div class="mc-val blue">${fmtK(repRev)}</div></div>
+    <div class="metric-card"><div class="mc-label">Expenses</div><div class="mc-val red">${fmtK(exp)}</div></div>
+  </div>
+  <div class="card" style="background:var(--green-bg);border-color:rgba(34,197,94,0.3);margin-bottom:16px">
+    <div style="font-size:12px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Net Profit (after all expenses)</div>
+    <div style="font-size:32px;font-weight:800;color:var(--green)">${fmt(net)}</div>
+  </div>
+  <div class="two-col">
+    <div class="card"><div class="card-title">Sales Invoices</div>${D.bills.length===0?'<div class="empty">No invoices</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice</th><th>Customer</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td style="color:var(--orange);font-weight:700">${b.id}</td><td>${b.customer_name}</td><td style="color:var(--green);font-weight:700">${fmt(b.total)}</td><td style="color:var(--amber);font-weight:700">${fmt(b.profit)}</td></tr>`).join('')}</tbody></table></div>`}</div>
+    <div class="card"><div class="card-title">Expenses</div>${D.expenses.length===0?'<div class="empty">No expenses</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>${D.expenses.map(e=>`<tr><td><span class="badge badge-amber">${e.category}</span></td><td>${e.description}</td><td style="color:var(--red);font-weight:700">${fmt(e.amount)}</td></tr>`).join('')}</tbody></table></div>`}</div>
+  </div>
+  </div>`;
 }
 
-// ========== FIX 4 – LEDGER (fixed buttons + opening balance) ==========
-function custBalance(c){
-  const ob=getOpeningBalance(1,c.id);
-  const totalBilled=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
-  const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);
-  return{ob,totalBilled:ob+totalBilled,totalPaid,balance:ob+totalBilled-totalPaid};
-}
-function suppBalance(s){
-  const ob=getOpeningBalance(2,s.id);
-  const totalOwed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);
-  const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);
-  return{ob,totalOwed:ob+totalOwed,totalPaid,balance:ob+totalOwed-totalPaid};
-}
-
+// LEDGER
 function rLedger(){
   const isC=ST.ledgerTab!=='suppliers';
   const list=isC?D.customers:D.suppliers;
   const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  function custBalance(c){
+    const totalBilled=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
+    const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);
+    return{totalBilled,totalPaid,balance:totalBilled-totalPaid};
+  }
+  function suppBalance(s){
+    const totalOwed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);
+    const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);
+    return{totalOwed,totalPaid,balance:totalOwed-totalPaid};
+  }
   const totalCustBalance=D.customers.reduce((a,c)=>{const b=custBalance(c);return a+b.balance;},0);
   const totalSuppBalance=D.suppliers.reduce((a,s)=>{const b=suppBalance(s);return a+b.balance;},0);
-  return`<div class="page-header"><h1>Ledger</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-green btn-sm" onclick="printCombinedLedger(1)">🖨 All Customer Report</button><button class="btn-red btn-sm" onclick="printCombinedLedger(2)">🖨 All Supplier Report</button></div></div><div class="page-content"><div class="metric-grid" style="grid-template-columns:repeat(2,1fr)"><div class="metric-card" style="border-color:rgba(34,197,94,0.3)"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmt(totalCustBalance)}</div></div><div class="metric-card" style="border-color:rgba(239,68,68,0.3)"><div class="mc-label">You Owe Suppliers</div><div class="mc-val red">${fmt(totalSuppBalance)}</div></div></div><div class="tab-row"><button class="tab-btn${isC?' active':''}" onclick="ST.ledgerTab='customers';ST.search='';renderMain()">📥 Customer Balances</button><button class="tab-btn${!isC?' active':''}" onclick="ST.ledgerTab='suppliers';ST.search='';renderMain()">📤 Supplier Balances</button></div><input class="plain-search" placeholder="Search ${isC?'customers':'suppliers'}..." value="${ST.search}" oninput="ST.search=this.value;renderMain()">${filtered.length===0?`<div class="empty">No ${isC?'customers':'suppliers'} yet. Add them in People tab first.</div>`:filtered.map(x=>{const bal=isC?custBalance(x):suppBalance(x);const totalAmt=isC?bal.totalBilled:bal.totalOwed;const balColor=bal.balance>0?'var(--red)':bal.balance<0?'var(--green)':'var(--text3)';const balLabel=isC?(bal.balance>0?'Outstanding':'Overpaid'):(bal.balance>0?'You Owe':'Overpaid');const xId=x.id; const xName=x.name.replace(/'/g,"\\'"); const xType=isC?1:2; return`<div class="item-row"><div class="mi"><div style="display:flex;align-items:center;gap:10px"><div class="person-avatar" style="background:${avatarColor(x.name)};width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${initials(x.name)}</div><div><div class="iname">${x.name}</div><div class="isub">${x.phone||''} ${x.city?'· '+x.city:''}</div></div></div>${bal.ob>0?`<div style="font-size:11px;color:var(--amber);font-weight:600;margin:6px 0 0;padding:4px 8px;background:var(--amber-bg);border-radius:6px;display:inline-block">Opening Balance: ${fmt(bal.ob)}</div>`:''}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)"><div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:14px;font-weight:800;color:var(--text);margin-top:2px">${fmt(totalAmt)}</div></div><div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Paid</div><div style="font-size:14px;font-weight:800;color:var(--green);margin-top:2px">${fmt(bal.totalPaid)}</div></div><div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${balLabel}</div><div style="font-size:14px;font-weight:800;margin-top:2px;color:${balColor}">${fmt(Math.abs(bal.balance))}</div></div></div><div class="iacts"><button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" onclick="openPaymentModal(${xType},${xId},'${xName}')">+ Record Payment</button><button class="iab" onclick="showLedgerDetail(${xType},${xId},'${xName}')">📋 View History</button><button class="iab" onclick="printIndividualLedger(${xType},${xId},'${xName}')">🖨 Print Report</button><button class="iab" style="color:var(--amber);border-color:var(--amber)" onclick="openOpeningBalanceModal(${xType},${xId},'${xName}')">📌 Opening Balance</button></div></div><div style="text-align:right;min-width:100px"><span class="badge ${bal.balance<=0?'badge-green':bal.balance>0&&bal.balance<totalAmt*0.5?'badge-amber':'badge-red'}">${bal.balance<=0?'✓ Cleared':bal.balance===totalAmt?'Unpaid':'Partial'}</span>${bal.balance>0?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Due: ${fmt(bal.balance)}</div>`:''}</div></div>`;}).join('')}</div>`;
+  return`
+  <div class="page-header"><h1>Ledger</h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-green btn-sm" onclick="printCombinedLedger(1)">🖨 All Customer Report</button>
+      <button class="btn-red btn-sm" onclick="printCombinedLedger(2)">🖨 All Supplier Report</button>
+    </div>
+  </div>
+  <div class="page-content">
+  <div class="metric-grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="metric-card" style="border-color:rgba(34,197,94,0.3)"><div class="mc-label">Customers Owe You</div><div class="mc-val green">${fmt(totalCustBalance)}</div></div>
+    <div class="metric-card" style="border-color:rgba(239,68,68,0.3)"><div class="mc-label">You Owe Suppliers</div><div class="mc-val red">${fmt(totalSuppBalance)}</div></div>
+  </div>
+  <div class="tab-row">
+    <button class="tab-btn${isC?' active':''}" onclick="ST.ledgerTab='customers';ST.search='';renderMain()">📥 Customer Balances</button>
+    <button class="tab-btn${!isC?' active':''}" onclick="ST.ledgerTab='suppliers';ST.search='';renderMain()">📤 Supplier Balances</button>
+  </div>
+  <input class="plain-search" placeholder="Search ${isC?'customers':'suppliers'}..." value="${ST.search}" oninput="ST.search=this.value;renderMain()">
+  ${filtered.length===0?`<div class="empty">No ${isC?'customers':'suppliers'} yet. Add them in People tab first.</div>`:
+    filtered.map(x=>{
+      const bal=isC?custBalance(x):suppBalance(x);
+      const totalAmt=isC?bal.totalBilled:bal.totalOwed;
+      const balColor=bal.balance>0?'var(--red)':bal.balance<0?'var(--green)':'var(--text3)';
+      const balLabel=isC?(bal.balance>0?'Outstanding':'Overpaid'):(bal.balance>0?'You Owe':'Overpaid');
+      return`<div class="item-row">
+        <div class="mi">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="person-avatar" style="background:${avatarColor(x.name)};width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${initials(x.name)}</div>
+            <div><div class="iname">${x.name}</div><div class="isub">${x.phone||''} ${x.city?'· '+x.city:''}</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)">
+            <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:14px;font-weight:800;color:var(--text);margin-top:2px">${fmt(totalAmt)}</div></div>
+            <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Paid</div><div style="font-size:14px;font-weight:800;color:var(--green);margin-top:2px">${fmt(bal.totalPaid)}</div></div>
+            <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${balLabel}</div><div style="font-size:14px;font-weight:800;margin-top:2px;color:${balColor}">${fmt(Math.abs(bal.balance))}</div></div>
+          </div>
+          <div class="iacts">
+            <button class="iab" style="color:var(--orange);border-color:var(--orange);font-weight:700" data-action="pay" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">+ Record Payment</button>
+            <button class="iab" data-action="history" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">📋 View History</button>
+            <button class="iab" data-action="print" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">🖨 Print Report</button>
+            <button class="iab" style="color:var(--blue);border-color:var(--blue)" data-action="opening" data-type="${isC?1:2}" data-id="${x.id}" data-name="${(x.name||'').replace(/"/g,'&quot;')}" onclick="ldAction(this)">📌 Opening Balance</button>
+          </div>
+        </div>
+        <div style="text-align:right;min-width:100px">
+          <span class="badge ${bal.balance<=0?'badge-green':bal.balance>0&&bal.balance<totalAmt*0.5?'badge-amber':'badge-red'}">${bal.balance<=0?'✓ Cleared':bal.balance===totalAmt?'Unpaid':'Partial'}</span>
+          ${bal.balance>0?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Due: ${fmt(bal.balance)}</div>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
-function openOpeningBalanceModal(type, id, name){
-  const currentOB = getOpeningBalance(type, id);
-  const isC = type===1;
+// Ledger button dispatcher — avoids JSON.stringify in onclick
+function ldAction(btn){
+  const action=btn.dataset.action;
+  const type=Number(btn.dataset.type);
+  const id=Number(btn.dataset.id);
+  const name=btn.dataset.name;
+  if(action==='pay') openPaymentModal(type,id,name);
+  else if(action==='history') showLedgerDetail(type,id,name);
+  else if(action==='print') printIndividualLedger(type,id,name);
+  else if(action==='opening') openOpeningBalanceModal(type,id,name);
+}
+
+// Opening Balance modal
+function openOpeningBalanceModal(type,id,name){
+  const isC=type===1;
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px"><h3>📌 Opening Balance — ${name}</h3><div style="background:var(--amber-bg);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--amber);font-weight:600;line-height:1.7">💡 Use this to record any debt that existed <b>before</b> you started using iVault.<br>${isC?'A positive amount means this customer already owed you money.':'A positive amount means you already owed this supplier money.'}</div><div class="mfield"><label>OPENING BALANCE (RS.)</label><input type="number" id="ob_amount" value="${currentOB}" placeholder="0" min="0"></div><div style="font-size:11px;color:var(--text3);margin-bottom:12px;font-weight:500">Set to 0 to clear the opening balance.</div><div class="mbtns"><button class="bsave" onclick="saveOpeningBalance(${type},${id},'${name}')">✓ Save Opening Balance</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px">
+    <h3>📌 Opening Balance — ${name}</h3>
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500;line-height:1.6">
+      ${isC?'💡 Use this to record amounts this customer owed you <b>before</b> you started using iVault. This will be added as debt to their ledger.':'💡 Use this to record amounts you owed this supplier <b>before</b> you started using iVault. This will be added as debt to their ledger.'}
+    </div>
+    <div class="mfield"><label>DATE (when this balance was owed from)</label><input type="date" id="ob_date" value="${today()}"></div>
+    <div class="mfield"><label>${isC?'AMOUNT CUSTOMER OWES YOU (RS.)':'AMOUNT YOU OWE SUPPLIER (RS.)'}</label><input type="number" id="ob_amount" placeholder="Enter opening balance amount..."></div>
+    <div class="mfield"><label>NOTE</label><input id="ob_note" placeholder="e.g. Balance brought forward from previous records" value="Opening balance brought forward"></div>
+    <div class="mbtns">
+      <button class="bsave" onclick="saveOpeningBalance(${type},${id},'${name.replace(/'/g,"\\'")}')">✓ Add Opening Balance</button>
+      <button class="bcancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div></div>`;
   document.body.appendChild(div);
 }
-async function saveOpeningBalance(type, id, name){
-  const amount = Number(document.getElementById('ob_amount')?.value || 0);
-  const key = (type===1?'cust_':'supp_') + id;
-  const uid = CU.id;
-  const currentOBs = D.settings?.opening_balances || {};
-  if(amount <= 0) delete currentOBs[key];
-  else currentOBs[key] = amount;
-  const exists = await api('GET','settings',null,`user_id=eq.${uid}`);
-  const res = exists&&exists.length>0 ? await api('PATCH','settings',{opening_balances: currentOBs},`user_id=eq.${uid}`) : await api('POST','settings',{user_id:uid, opening_balances: currentOBs});
-  if(!res){ alert('Save failed. Please try again.'); return; }
-  if(D.settings) D.settings.opening_balances = currentOBs;
-  closeModal();
-  renderMain();
+
+async function saveOpeningBalance(type,id,name){
+  const date=document.getElementById('ob_date')?.value||today();
+  const amount=Number(document.getElementById('ob_amount')?.value||0);
+  const note=document.getElementById('ob_note')?.value||'Opening balance brought forward';
+  if(!amount||amount<=0)return alert('Please enter a valid amount');
+  const isC=type===1;
+  // For customer: opening balance = they OWE us = it's like an invoice (debit)
+  // We record it as a negative payment (they "owe" = we add to bills concept via a special payment entry with negative)
+  // Cleanest: add as a special "opening" entry in payments with negative sign so it offsets
+  // Actually for customer: opening balance means we ADD to what they owe = record as invoice-type
+  // Best approach: add to customer_payments as a NEGATIVE (meaning they owe MORE) — simpler ledger
+  // For customer ledger: debit = invoice, credit = payment
+  // Opening balance customer owes = we add a fake "invoice" via a special flag
+  // Simplest clean way: store in payments table with amount as NEGATIVE for "opening debit"
+  const table=isC?'customer_payments':'supplier_payments';
+  const data={
+    user_id:CU.id,date,
+    amount:-Math.abs(amount), // negative = they owe (debit side)
+    payment_method:'Opening Balance',
+    note,
+    ...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})
+  };
+  const res=await api('POST',table,data);
+  if(!res)return alert('Save failed. Please try again.');
+  closeModal();await loadAll();renderMain();
 }
+
 function openPaymentModal(type,id,name){
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
   const isC=type===1;
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px"><h3>${isC?'📥':'📤'} Record Payment — ${name}</h3><div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500">${isC?'💡 Customer paying you — record money received':'💡 You paying supplier — record money sent'}</div><div class="mfield"><label>DATE</label><input type="date" id="pay_date" value="${today()}"></div><div class="mfield"><label>AMOUNT (RS.) *</label><input type="number" id="pay_amount" placeholder="Enter payment amount..."></div><div class="mfield"><label>PAYMENT METHOD</label><select id="pay_method"><option>Cash</option><option>Bank Transfer</option><option>HBL</option><option>Meezan Bank</option><option>JazzCash</option><option>Easypaisa</option><option>Cheque</option></select></div><div class="mfield"><label>NOTE (OPTIONAL)</label><input id="pay_note" placeholder="e.g. Partial payment, Invoice INV-001..."></div><div class="mbtns"><button class="bsave" onclick="savePayment(${type},${id},'${name}')">✓ Save Payment</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px">
+    <h3>${isC?'📥':'📤'} Record Payment — ${name}</h3>
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2);font-weight:500">
+      ${isC?'💡 Customer paying you — record money received':'💡 You paying supplier — record money sent'}
+    </div>
+    <div class="mfield"><label>DATE</label><input type="date" id="pay_date" value="${today()}"></div>
+    <div class="mfield"><label>AMOUNT (RS.) *</label><input type="number" id="pay_amount" placeholder="Enter payment amount..."></div>
+    <div class="mfield"><label>PAYMENT METHOD</label><select id="pay_method">
+      <option>Cash</option><option>Bank Transfer</option><option>HBL</option><option>Meezan Bank</option><option>JazzCash</option><option>Easypaisa</option><option>Cheque</option>
+    </select></div>
+    <div class="mfield"><label>NOTE (OPTIONAL)</label><input id="pay_note" placeholder="e.g. Partial payment, Invoice INV-001..."></div>
+    <div class="mbtns">
+      <button class="bsave" onclick="savePayment(${type},${id},window._pmName)">✓ Save Payment</button>
+      <button class="bcancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div></div>`;
+  window._pmName=name;
   document.body.appendChild(div);
 }
+
 async function savePayment(type,id,name){
   const date=document.getElementById('pay_date')?.value;
   const amount=Number(document.getElementById('pay_amount')?.value||0);
@@ -609,32 +847,70 @@ async function savePayment(type,id,name){
   if(!res)return alert('Save failed. Please try again.');
   closeModal();await loadAll();renderMain();
 }
+
 function buildLedgerTimeline(type,id,name){
   const isC=type===1;
-  const ob=getOpeningBalance(type,id);
   const bills=isC?D.bills.filter(b=>b.customer_name===name):[];
   const purchases=!isC?D.stockPurchases.filter(p=>p.supplier_name===name):[];
   const payments=isC?D.customerPayments.filter(p=>p.customer_id==id):D.supplierPayments.filter(p=>p.supplier_id==id);
   const timeline=[];
-  if(ob>0) timeline.push({date:'0000-00-00',type:'opening',label:'Opening Balance (pre-existing debt)',debit:ob,credit:0});
   if(isC) bills.forEach(b=>timeline.push({date:b.date,type:'invoice',label:`Invoice ${b.id}`,debit:Number(b.total),credit:0}));
   else purchases.forEach(p=>timeline.push({date:p.date,type:'purchase',label:`Purchase ${p.purchase_id||p.id}`,debit:Number(p.total_cost),credit:0}));
-  payments.forEach(p=>timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,debit:0,credit:Number(p.amount),payId:p.id}));
-  timeline.sort((a,b)=>a.date.localeCompare(b.date));
+  payments.forEach(p=>{
+    const amt=Number(p.amount);
+    const isOpening=p.payment_method==='Opening Balance';
+    if(isOpening){
+      // negative amount = opening debit (they owe us / we owe them)
+      timeline.push({date:p.date,type:'opening',label:`📌 ${p.note||'Opening balance'}`,debit:Math.abs(amt),credit:0,payId:p.id});
+    } else {
+      timeline.push({date:p.date,type:'payment',label:`Payment (${p.payment_method})${p.note?' — '+p.note:''}`,debit:0,credit:amt,payId:p.id});
+    }
+  });
+  timeline.sort((a,b)=>new Date(a.date)-new Date(b.date));
   let running=0;
   return timeline.map(t=>{running+=t.debit-t.credit;return{...t,running};});
 }
+
 function showLedgerDetail(type,id,name){
   const isC=type===1;
   const rows=buildLedgerTimeline(type,id,name);
   const totalDebit=rows.reduce((a,r)=>a+r.debit,0);
   const totalCredit=rows.reduce((a,r)=>a+r.credit,0);
   const balance=totalDebit-totalCredit;
+  // store for safe onclick use
+  window._ldType=type;window._ldId=id;window._ldName=name;
   const div=document.createElement('div');div.className='modal-ov';
-  div.innerHTML=`<div class="modal" style="max-width:600px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px"><h3 style="margin:0">${isC?'📥':'📤'} Ledger — ${name}</h3><div style="display:flex;gap:6px"><button class="btn-orange btn-sm" onclick="this.closest('.modal-ov').remove();openPaymentModal(${type},${id},'${name.replace(/'/g,"\\'")}')">+ Payment</button><button class="btn-green btn-sm" onclick="printIndividualLedger(${type},${id},'${name.replace(/'/g,"\\'")}')">🖨 Print</button></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px"><div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:16px;font-weight:800;color:var(--text);margin-top:3px">${fmt(totalDebit)}</div></div><div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Paid</div><div style="font-size:16px;font-weight:800;color:var(--green);margin-top:3px">${fmt(totalCredit)}</div></div><div style="background:${balance>0?'var(--red-bg)':'var(--green-bg)'};border-radius:8px;padding:10px;border:1px solid ${balance>0?'rgba(239,68,68,0.3)':'rgba(34,197,94,0.3)'}"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Balance</div><div style="font-size:16px;font-weight:800;color:${balance>0?'var(--red)':'var(--green)'};margin-top:3px">${fmt(Math.abs(balance))} ${balance>0?'Due':'✓'}</div></div></div>${rows.length===0?'<div class="empty">No transactions yet</div>':`<div style="overflow-x:auto;max-height:380px;overflow-y:auto"><table class="tbl"><thead style="position:sticky;top:0;background:var(--bg2)"><tr><th>Date</th><th>Description</th><th>${isC?'Invoice Amt':'Purchase Amt'}</th><th>Payment</th><th>Balance</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td style="color:var(--text3);white-space:nowrap;font-size:12px">${r.date==='0000-00-00'?'Opening':r.date}</td><td style="font-size:12px">${r.label}</td><td style="color:var(--red);font-weight:700">${r.debit>0?fmt(r.debit):'—'}</td><td style="color:var(--green);font-weight:700">${r.credit>0?fmt(r.credit):'—'}</td><td style="font-weight:800;color:${r.running>0?'var(--red)':'var(--green)'}">${fmt(Math.abs(r.running))}</td><td>${r.type==='payment'?`<button class="iab" style="color:var(--red)" onclick="delPayment(${type},${r.payId})">🗑</button>`:''}</td></tr>`).join('')}</tbody></table></div>`}<button class="bcancel" style="width:100%;margin-top:14px" onclick="this.closest('.modal-ov').remove()">Close</button></div>`;
+  div.innerHTML=`<div class="modal" style="max-width:600px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">${isC?'📥':'📤'} Ledger — ${name}</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn-orange btn-sm" onclick="openPaymentModal(window._ldType,window._ldId,window._ldName);this.closest('.modal-ov').remove()">+ Payment</button>
+        <button class="btn-green btn-sm" onclick="printIndividualLedger(window._ldType,window._ldId,window._ldName)">🖨 Print</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${isC?'Total Billed':'Total Purchased'}</div><div style="font-size:16px;font-weight:800;color:var(--text);margin-top:3px">${fmt(totalDebit)}</div></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Paid</div><div style="font-size:16px;font-weight:800;color:var(--green);margin-top:3px">${fmt(totalCredit)}</div></div>
+      <div style="background:${balance>0?'var(--red-bg)':'var(--green-bg)'};border-radius:8px;padding:10px;border:1px solid ${balance>0?'rgba(239,68,68,0.3)':'rgba(34,197,94,0.3)'}"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Balance</div><div style="font-size:16px;font-weight:800;color:${balance>0?'var(--red)':'var(--green)'};margin-top:3px">${fmt(Math.abs(balance))} ${balance>0?'Due':'✓'}</div></div>
+    </div>
+    ${rows.length===0?'<div class="empty">No transactions yet</div>':`
+    <div style="overflow-x:auto;max-height:380px;overflow-y:auto"><table class="tbl">
+      <thead style="position:sticky;top:0;background:var(--bg2)"><tr><th>Date</th><th>Description</th><th>${isC?'Invoice Amt':'Purchase Amt'}</th><th>Payment</th><th>Balance</th><th></th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td style="color:var(--text3);white-space:nowrap;font-size:12px">${r.date}</td>
+        <td style="font-size:12px">${r.label}</td>
+        <td style="color:var(--red);font-weight:700">${r.debit>0?fmt(r.debit):'—'}</td>
+        <td style="color:var(--green);font-weight:700">${r.credit>0?fmt(r.credit):'—'}</td>
+        <td style="font-weight:800;color:${r.running>0?'var(--red)':'var(--green)'}">${fmt(Math.abs(r.running))}</td>
+        <td>${r.type==='payment'?`<button class="iab" style="color:var(--red)" onclick="delPayment(${type},${r.payId})">🗑</button>`:''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`}
+    <button class="bcancel" style="width:100%;margin-top:14px" onclick="this.closest('.modal-ov').remove()">Close</button>
+  </div>`;
   div.onclick=e=>{if(e.target===div)div.remove();};
   document.body.appendChild(div);
 }
+
 function printIndividualLedger(type,id,name){
   const isC=type===1;
   const s=D.settings||{};
@@ -642,26 +918,83 @@ function printIndividualLedger(type,id,name){
   const totalDebit=rows.reduce((a,r)=>a+r.debit,0);
   const totalCredit=rows.reduce((a,r)=>a+r.credit,0);
   const balance=totalDebit-totalCredit;
-  const person=isC?D.customers.find(c=>c.id==id):D.suppliers.find(x=>x.id==id);
+  const person=isC?D.customers.find(c=>c.id==id):D.suppliers.find(s=>s.id==id);
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>Ledger — ${name}</title><style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px;color:#333}.hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.mc{background:#f9f9f9;border-radius:6px;padding:10px}.mc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.mc .v{font-size:16px;font-weight:800;margin-top:3px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}td{padding:7px 8px;border-bottom:1px solid #f0f0f0}.green{color:#16a34a}.red{color:#dc2626}.footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}</style></head><body><div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div><h2>${isC?'Customer':'Supplier'} Ledger Report — ${name}</h2><div style="font-size:12px;margin-bottom:12px">${person?.phone?'Phone: '+person.phone+' · ':''} ${person?.city?'City: '+person.city:''} · Generated: ${new Date().toLocaleDateString()}</div><div class="meta"><div class="mc"><div class="l">${isC?'Total Billed':'Total Purchased'}</div><div class="v red">Rs. ${totalDebit.toLocaleString()}</div></div><div class="mc"><div class="l">Total Paid</div><div class="v green">Rs. ${totalCredit.toLocaleString()}</div></div><div class="mc"><div class="l">Balance</div><div class="v" style="color:${balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(balance).toLocaleString()} ${balance>0?'Due':'✓ Cleared'}</div></div></div><h2>Transaction History</h2><table><thead><tr><th>Date</th><th>Description</th><th>${isC?'Invoice':'Purchase'}</th><th>Payment</th><th>Running Balance</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.date==='0000-00-00'?'Opening':r.date}</td><td>${r.label}</td><td class="red">${r.debit>0?'Rs. '+r.debit.toLocaleString():'—'}</td><td class="green">${r.credit>0?'Rs. '+r.credit.toLocaleString():'—'}</td><td style="font-weight:700;color:${r.running>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.running).toLocaleString()}</td></tr>`).join('')}</tbody></table><div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div><script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>Ledger — ${name}</title><style>
+  @page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}
+  h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px;color:#333}
+  .hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}
+  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .mc{background:#f9f9f9;border-radius:6px;padding:10px}.mc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.mc .v{font-size:16px;font-weight:800;margin-top:3px}
+  table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f0}
+  .green{color:#16a34a}.red{color:#dc2626}.footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+  </style></head><body>
+  <div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div>
+  <h2>${isC?'Customer':'Supplier'} Ledger Report — ${name}</h2>
+  <div style="font-size:12px;margin-bottom:12px">${person?.phone?'Phone: '+person.phone+' · ':''} ${person?.city?'City: '+person.city:''} · Generated: ${new Date().toLocaleDateString()}</div>
+  <div class="meta">
+    <div class="mc"><div class="l">${isC?'Total Billed':'Total Purchased'}</div><div class="v red">Rs. ${totalDebit.toLocaleString()}</div></div>
+    <div class="mc"><div class="l">Total Paid</div><div class="v green">Rs. ${totalCredit.toLocaleString()}</div></div>
+    <div class="mc"><div class="l">Balance</div><div class="v" style="color:${balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(balance).toLocaleString()} ${balance>0?'Due':'✓ Cleared'}</div></div>
+  </div>
+  <h2>Transaction History</h2>
+  <table><thead><tr><th>Date</th><th>Description</th><th>${isC?'Invoice':'Purchase'}</th><th>Payment</th><th>Running Balance</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr><td>${r.date}</td><td>${r.label}</td><td class="red">${r.debit>0?'Rs. '+r.debit.toLocaleString():'—'}</td><td class="green">${r.credit>0?'Rs. '+r.credit.toLocaleString():'—'}</td><td style="font-weight:700;color:${r.running>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.running).toLocaleString()}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div>
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
   w.document.close();
 }
+
 function printCombinedLedger(type){
   const isC=type===1;
   const s=D.settings||{};
   const list=isC?D.customers:D.suppliers;
   const rows=list.map(x=>{
-    if(isC){ const b=custBalance(x); return{name:x.name,phone:x.phone||'',city:x.city||'',billed:b.totalBilled,paid:b.totalPaid,balance:b.balance}; }
-    else{ const b=suppBalance(x); return{name:x.name,phone:x.phone||'',city:x.city||'',billed:b.totalOwed,paid:b.totalPaid,balance:b.balance}; }
+    if(isC){
+      const billed=D.bills.filter(b=>b.customer_name===x.name).reduce((a,b)=>a+Number(b.total),0);
+      const paid=D.customerPayments.filter(p=>p.customer_id==x.id).reduce((a,p)=>a+Number(p.amount),0);
+      return{name:x.name,phone:x.phone||'',city:x.city||'',billed,paid,balance:billed-paid};
+    } else {
+      const owed=D.stockPurchases.filter(p=>p.supplier_name===x.name).reduce((a,p)=>a+Number(p.total_cost),0);
+      const paid=D.supplierPayments.filter(p=>p.supplier_id==x.id).reduce((a,p)=>a+Number(p.amount),0);
+      return{name:x.name,phone:x.phone||'',city:x.city||'',billed:owed,paid,balance:owed-paid};
+    }
   });
   const grandBilled=rows.reduce((a,r)=>a+r.billed,0);
   const grandPaid=rows.reduce((a,r)=>a+r.paid,0);
   const grandBal=rows.reduce((a,r)=>a+r.balance,0);
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>${isC?'Customer':'Supplier'} Ledger Report</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px}.hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.sc{background:#f9f9f9;border-radius:6px;padding:10px}.sc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.sc .v{font-size:18px;font-weight:800;margin-top:3px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}td{padding:7px 8px;border-bottom:1px solid #f0f0f0}tr:hover td{background:#fafafa}.green{color:#16a34a}.red{color:#dc2626}.tfoot td{font-weight:800;background:#f5f5f5;border-top:2px solid #ddd}.footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}</style></head><body><div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div><h2>All ${isC?'Customer':'Supplier'} Ledger Report — ${new Date().toLocaleDateString()}</h2><div class="summary"><div class="sc"><div class="l">Total ${isC?'Billed':'Purchased'}</div><div class="v red">Rs. ${grandBilled.toLocaleString()}</div></div><div class="sc"><div class="l">Total Received/Paid</div><div class="v green">Rs. ${grandPaid.toLocaleString()}</div></div><div class="sc"><div class="l">Total Outstanding</div><div class="v" style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</div></div></div><table><thead><tr><th>#</th><th>${isC?'Customer':'Supplier'} Name</th><th>Phone</th><th>City</th><th>${isC?'Total Billed':'Total Purchased'}</th><th>Total Paid</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td style="font-weight:700">${r.name}</td><td>${r.phone}</td><td>${r.city}</td><td class="red">Rs. ${r.billed.toLocaleString()}</td><td class="green">Rs. ${r.paid.toLocaleString()}</td><td style="font-weight:800;color:${r.balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.balance).toLocaleString()}</td><td>${r.balance<=0?'✓ Cleared':r.balance===r.billed?'Unpaid':'Partial'}</td></tr>`).join('')}</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td class="red">Rs. ${grandBilled.toLocaleString()}</td><td class="green">Rs. ${grandPaid.toLocaleString()}</td><td style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</td><td></td></tr></tfoot></table><div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div><script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>${isC?'Customer':'Supplier'} Ledger Report</title><style>
+  @page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#111;max-width:190mm}
+  h1{color:#f97316;margin:0 0 4px;font-size:20px}h2{font-size:14px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:4px}
+  .hdr{border-bottom:2px solid #eee;padding-bottom:10px;margin-bottom:14px}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .sc{background:#f9f9f9;border-radius:6px;padding:10px}.sc .l{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}.sc .v{font-size:18px;font-weight:800;margin-top:3px}
+  table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f5f5;text-align:left;padding:7px 8px;font-size:10px;border-bottom:2px solid #ddd;text-transform:uppercase}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f0}tr:hover td{background:#fafafa}
+  .green{color:#16a34a}.red{color:#dc2626}.tfoot td{font-weight:800;background:#f5f5f5;border-top:2px solid #ddd}
+  .footer{text-align:center;margin-top:16px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+  </style></head><body>
+  <div class="hdr"><h1>${s.company_name||'iVault'}</h1><div style="font-size:11px;color:#888">${s.address||''} · ${s.phone||''}</div></div>
+  <h2>All ${isC?'Customer':'Supplier'} Ledger Report — ${new Date().toLocaleDateString()}</h2>
+  <div class="summary">
+    <div class="sc"><div class="l">Total ${isC?'Billed':'Purchased'}</div><div class="v red">Rs. ${grandBilled.toLocaleString()}</div></div>
+    <div class="sc"><div class="l">Total Received/Paid</div><div class="v green">Rs. ${grandPaid.toLocaleString()}</div></div>
+    <div class="sc"><div class="l">Total Outstanding</div><div class="v" style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</div></div>
+  </div>
+  <table><thead><tr><th>#</th><th>${isC?'Customer':'Supplier'} Name</th><th>Phone</th><th>City</th><th>${isC?'Total Billed':'Total Purchased'}</th><th>Total Paid</th><th>Balance</th><th>Status</th></tr></thead>
+  <tbody>
+  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td style="font-weight:700">${r.name}</td><td>${r.phone}</td><td>${r.city}</td><td class="red">Rs. ${r.billed.toLocaleString()}</td><td class="green">Rs. ${r.paid.toLocaleString()}</td><td style="font-weight:800;color:${r.balance>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(r.balance).toLocaleString()}</td><td>${r.balance<=0?'✓ Cleared':r.balance===r.billed?'Unpaid':'Partial'}</td></tr>`).join('')}
+  </tbody>
+  <tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td>Rs. ${grandBilled.toLocaleString()}</td><td>Rs. ${grandPaid.toLocaleString()}</td><td style="color:${grandBal>0?'#dc2626':'#16a34a'}">Rs. ${Math.abs(grandBal).toLocaleString()}</td><td></td></tr></tfoot>
+  </table>
+  <div class="footer">${s.company_name||'iVault'} · Printed ${new Date().toLocaleString()}</div>
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
   w.document.close();
 }
+
 async function delPayment(type,id){
   if(!confirm('Delete this payment record?'))return;
   const table=type===1?'customer_payments':'supplier_payments';
@@ -671,127 +1004,141 @@ async function delPayment(type,id){
   renderMain();
 }
 
-// ========== FIX 3 – FULL BILL EDIT (items can be changed) ==========
-let editBillItems=[];
-function openEditBillModal(id){
-  const b=D.bills.find(x=>x.id===id);if(!b)return;
-  editBillItems=(b.items||[]).map(i=>({...i,sale_price:i.sale_price||i.price||0,search:i.device_name||''}));
-  const old=document.getElementById('modalWrap');if(old)old.remove();
-  const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:580px"><h3>✏️ Full Edit — ${b.id}</h3><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px">Customer Info</div><div class="tf"><div class="mfield"><label>CUSTOMER NAME *</label><input id="eb_cust" value="${b.customer_name||''}"></div><div class="mfield"><label>CUSTOMER PHONE</label><input id="eb_phone" value="${b.customer_phone||''}"></div></div><div class="tf"><div class="mfield"><label>DATE</label><input type="date" id="eb_date" value="${b.date||today()}"></div></div><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px;border-bottom:1px solid var(--border);padding-bottom:8px">Items — Edit, Add or Remove</div><div id="editBillItemsWrap"></div><button onclick="addEditBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:8px">Notes</div><div class="mfield"><textarea id="eb_notes" style="min-height:65px">${b.notes||''}</textarea></div><div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div><div class="mfield"><label>STATUS</label><select id="eb_status" onchange="document.getElementById('eb_partial_wrap').style.display=this.value==='Partial'?'block':'none';updateEditBillTotals()"><option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid — Full amount due</option><option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial — Paid some</option><option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared — Fully paid</option></select></div><div id="eb_partial_wrap" style="${b.pay_status==='Partial'?'':'display:none'}"><div class="mfield"><label>AMOUNT PAID (RS.)</label><input type="number" id="eb_paid" value="${b.amount_paid||0}" oninput="updateEditBillTotals()"></div></div><div id="eb_totals_preview" style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;border:1px solid var(--border)"><div style="font-size:11px;color:var(--text3);font-weight:700;margin-bottom:6px">TOTALS PREVIEW</div><div id="eb_total_line" style="font-size:15px;font-weight:800;color:var(--green)">Total: —</div><div id="eb_balance_line" style="font-size:13px;font-weight:700;color:var(--red);margin-top:3px"></div></div></div><div class="mbtns"><button class="bsave" onclick="saveFullEditBill('${b.id}')">✓ Save All Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
-  document.body.appendChild(div);
-  refreshEditBillItems();
-  updateEditBillTotals();
-}
-function addEditBillItem(){
-  editBillItems.push({inv_id:null,device_name:'',serial:'',imei:'',sale_price:'',cost_price:0,search:'',isNew:true});
-  refreshEditBillItems();
-}
-function refreshEditBillItems(){
-  const wrap=document.getElementById('editBillItemsWrap');if(!wrap)return;
-  wrap.innerHTML=editBillItems.map((item,i)=>`<div class="unit-row"><div class="unit-title"><span>${item.device_name||'Item '+(i+1)}</span><button onclick="editBillItems.splice(${i},1);refreshEditBillItems();updateEditBillTotals()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button></div>${item.inv_id?`<div class="info-badge" style="margin-bottom:8px">✓ ${item.device_name}${item.serial?' · SN:'+item.serial:''}${item.imei?' · IMEI:'+item.imei:''}</div><div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:500">To change this item, remove it and add a new one below.</div>`:`<div class="mfield"><label>SEARCH BY IMEI / SERIAL / DEVICE NAME</label><div class="suggest-wrap"><input id="ebi_search_${i}" value="${item.search||''}" placeholder="Type IMEI, serial or device name..." oninput="searchEditInventory(${i},this.value)"><div id="ebi_suggest_${i}" class="suggest-list" style="display:none"></div></div></div>`}<div class="mfield"><label>SALE PRICE (RS.)</label><input type="number" id="ebi_price_${i}" value="${item.sale_price||''}" oninput="editBillItems[${i}].sale_price=this.value;updateEditBillTotals()" placeholder="Enter sale price..."></div></div>`).join('');
-}
-function searchEditInventory(idx,query){
-  const suggestEl=document.getElementById(`ebi_suggest_${idx}`);
-  if(!query||query.length<1){if(suggestEl)suggestEl.style.display='none';return;}
-  const results=D.inventory.filter(i=>i.status==='Available'&&((i.imei||'').toLowerCase().includes(query.toLowerCase())||(i.serial||'').toLowerCase().includes(query.toLowerCase())||(i.device_name||'').toLowerCase().includes(query.toLowerCase()))).slice(0,8);
-  if(!suggestEl)return;
-  if(results.length===0){suggestEl.innerHTML='<div class="suggest-item" style="color:var(--text3)">No available units found</div>';suggestEl.style.display='block';return;}
-  suggestEl.style.display='block';
-  suggestEl.innerHTML=results.map(r=>`<div class="suggest-item" onclick="selectEditInventoryItem(${idx},${r.id})"><b>${r.device_name}</b>${r.color?' · '+r.color:''}${r.storage?' · '+r.storage:''}<br><span style="font-size:11px;color:var(--text3)">${r.serial?'SN: '+r.serial+' ':''}${r.imei?'IMEI: '+r.imei:''} · Cost: ${fmt(r.cost_price)}</span></div>`).join('');
-}
-function selectEditInventoryItem(idx,invId){
-  const inv=D.inventory.find(i=>i.id===invId);if(!inv)return;
-  editBillItems[idx]={...editBillItems[idx],inv_id:invId,device_name:inv.device_name,serial:inv.serial||'',imei:inv.imei||'',cost_price:inv.cost_price,search:`${inv.device_name} ${inv.serial||''} ${inv.imei||''}`};
-  const el=document.getElementById(`ebi_suggest_${idx}`);if(el)el.style.display='none';
-  refreshEditBillItems();
-  setTimeout(()=>{const p=document.getElementById(`ebi_price_${idx}`);if(p)p.value=editBillItems[idx].sale_price||'';},30);
-  updateEditBillTotals();
-}
-function updateEditBillTotals(){
-  editBillItems.forEach((item,i)=>{const el=document.getElementById(`ebi_price_${i}`);if(el)item.sale_price=el.value;});
-  const total=editBillItems.reduce((a,i)=>a+Number(i.sale_price||0),0);
-  const status=document.getElementById('eb_status')?.value||'Unpaid';
-  const paid=status==='Cleared'?total:status==='Partial'?Number(document.getElementById('eb_paid')?.value||0):0;
-  const bal=total-paid;
-  const tl=document.getElementById('eb_total_line');
-  const bl=document.getElementById('eb_balance_line');
-  if(tl)tl.textContent=`Total: Rs. ${total.toLocaleString()}`;
-  if(bl)bl.textContent=paid>0?`Paid: Rs. ${paid.toLocaleString()} | Balance: Rs. ${Math.max(0,bal).toLocaleString()}`:'';
-}
-async function saveFullEditBill(id){
-  const b=D.bills.find(x=>x.id===id);if(!b)return;
-  const custName=document.getElementById('eb_cust')?.value?.trim();
-  if(!custName)return alert('Customer name is required');
-  editBillItems.forEach((item,i)=>{const el=document.getElementById(`ebi_price_${i}`);if(el)item.sale_price=el.value;});
-  const validItems=editBillItems.filter(item=>Number(item.sale_price)>0);
-  if(validItems.length===0)return alert('At least 1 item with a sale price is required');
-  const total=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
-  const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
-  const payStatus=document.getElementById('eb_status')?.value||'Unpaid';
-  const amtPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('eb_paid')?.value||0):0;
-  const balance=total-amtPaid;
-  const oldItems=b.items||[];
-  const oldInvIds=oldItems.map(i=>i.inv_id).filter(Boolean);
-  const newInvIds=validItems.map(i=>i.inv_id).filter(Boolean);
-  for(const oldId of oldInvIds){ if(!newInvIds.includes(oldId)) await api('PATCH','inventory',{status:'Available',sold_invoice:null},`id=eq.${oldId}`); }
-  for(const item of validItems){ if(item.inv_id&&!oldInvIds.includes(item.inv_id)) await api('PATCH','inventory',{status:'Sold',sold_invoice:id},`id=eq.${item.inv_id}`); }
-  const data={customer_name:custName,customer_phone:document.getElementById('eb_phone')?.value?.trim()||'',date:document.getElementById('eb_date')?.value||b.date,notes:document.getElementById('eb_notes')?.value?.trim()||'',items:validItems,total,profit:total-cost,pay_status:payStatus,amount_paid:amtPaid,balance};
-  const res=await api('PATCH','bills',data,`id=eq.${id}`);
-  if(!res)return alert('Save failed. Try again.');
-  closeModal();await loadAll();renderMain();
-}
-
 // BACKUP
 function rBackup(){
   const last=localStorage.getItem('ivault_last_backup')||'Never';
   const bEmail=localStorage.getItem('ivault_backup_email')||'';
-  return`<div class="page-header"><h1>Backup & Export</h1></div><div class="page-content"><div class="card"><div class="card-title">📊 Export Data</div><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Download your full business data anytime.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-green" onclick="exportExcel()">📊 Export Excel/CSV</button><button class="btn-blue" onclick="exportPDF()">📄 Export PDF</button><button class="btn-outline" onclick="exportJSON()">💾 Full Backup (JSON)</button></div></div><div class="card"><div class="card-title">☁️ Cloud Status</div><div class="ri"><div>Supabase cloud sync</div><span class="badge badge-green">Always ON ✓</span></div><div class="ri"><div>Row-level security</div><span class="badge badge-green">Active ✓</span></div><div class="ri"><div>Last local backup</div><span style="font-size:12px;color:var(--text3)">${last}</span></div><button class="btn-green" style="margin-top:12px" onclick="manualBackup()">⬇️ Download Local Backup</button></div><div class="card"><div class="card-title">📧 Monthly Email Backup</div><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Save your email to receive monthly backup reminders.</p><div class="mfield"><label>BACKUP EMAIL</label><input id="backupEmailInput" type="email" value="${bEmail}" placeholder="your@email.com"></div><button class="btn-orange" onclick="saveBackupEmail()">✓ Save Email</button><div id="backupEmailMsg" style="font-size:12px;margin-top:8px;color:var(--green);font-weight:600"></div></div></div>`;
+  return`
+  <div class="page-header"><h1>Backup & Export</h1></div>
+  <div class="page-content">
+  <div class="card"><div class="card-title">📊 Export Data</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Download your full business data anytime.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-green" onclick="exportExcel()">📊 Export Excel/CSV</button><button class="btn-blue" onclick="exportPDF()">📄 Export PDF</button><button class="btn-outline" onclick="exportJSON()">💾 Full Backup (JSON)</button></div>
+  </div>
+  <div class="card"><div class="card-title">☁️ Cloud Status</div>
+    <div class="ri"><div>Supabase cloud sync</div><span class="badge badge-green">Always ON ✓</span></div>
+    <div class="ri"><div>Row-level security</div><span class="badge badge-green">Active ✓</span></div>
+    <div class="ri"><div>Last local backup</div><span style="font-size:12px;color:var(--text3)">${last}</span></div>
+    <button class="btn-green" style="margin-top:12px" onclick="manualBackup()">⬇️ Download Local Backup</button>
+  </div>
+  <div class="card"><div class="card-title">📧 Monthly Email Backup</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Save your email to receive monthly backup reminders.</p>
+    <div class="mfield"><label>BACKUP EMAIL</label><input id="backupEmailInput" type="email" value="${bEmail}" placeholder="your@email.com"></div>
+    <button class="btn-orange" onclick="saveBackupEmail()">✓ Save Email</button>
+    <div id="backupEmailMsg" style="font-size:12px;margin-top:8px;color:var(--green);font-weight:600"></div>
+  </div>
+  </div>`;
 }
-function manualBackup(){ exportJSON(); localStorage.setItem('ivault_last_backup',new Date().toLocaleString()); renderMain(); }
-function saveBackupEmail(){ const email=document.getElementById('backupEmailInput')?.value?.trim(); if(!email)return; localStorage.setItem('ivault_backup_email',email); const el=document.getElementById('backupEmailMsg'); if(el)el.textContent='✓ Saved! Monthly backup reminders enabled.'; }
 
 // SETTINGS
 function rSettings(){
   const s=D.settings||{};const tab=ST.settingsTab||'company';
   const terms=s.terms||'';
-  return`<div class="page-header"><h1>Settings</h1></div><div class="page-content"><div class="tab-row"><button class="tab-btn${tab==='company'?' active':''}" onclick="ST.settingsTab='company';renderMain()">🏪 Company Info</button><button class="tab-btn${tab==='terms'?' active':''}" onclick="ST.settingsTab='terms';renderMain()">📋 Bill Terms</button><button class="tab-btn${tab==='theme'?' active':''}" onclick="ST.settingsTab='theme';renderMain()">🎨 Theme</button></div>${tab==='company'?`<div class="card"><div class="card-title">Company Information</div><div class="tf">${[['Company Name','company_name'],['Address','address'],['Phone','phone'],['Email','email']].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div></div><div class="card"><div class="card-title">Bank Accounts</div><div class="two-col">${[1,2].map(n=>`<div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)"><div style="font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px">BANK ${n}</div>${[['Bank Name',`bank${n}_name`],['Account No.',`bank${n}_acc`],['Account Title',`bank${n}_title`]].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>`).join('')}</div><button class="btn-orange" style="margin-top:14px" onclick="saveSettings()">✓ Save Settings</button></div>`:tab==='terms'?`<div class="card"><div class="card-title">📋 Terms & Conditions on Bills</div><p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms auto-appear on every printed invoice. Saved to your account — never disappears.</p><div class="mfield"><label>TERMS & CONDITIONS</label><textarea id="s_terms" style="min-height:200px;line-height:1.8" placeholder="Example:&#10;• Bills without original stamp and signature will not be entertained.&#10;• Please check the device completely before leaving the shop.&#10;• All sales are final. No returns after 24 hours.&#10;• Warranty void if device is physically damaged.">${terms}</textarea></div><button class="btn-orange" onclick="saveTerms()">✓ Save Terms</button><div id="termsSavedMsg" style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600"></div>${terms?`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-top:14px;border:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Preview on invoice:</div><div style="font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.8">${terms}</div></div>`:''}</div>`:`<div class="card"><div class="card-title">App Theme</div><div class="theme-toggle"><button class="theme-btn${THEME==='dark'?' active':''}" onclick="applyTheme('dark');renderMain()">🌙 Dark Mode</button><button class="theme-btn${THEME==='light'?' active':''}" onclick="applyTheme('light');renderMain()">☀️ Light Mode</button></div><p style="font-size:13px;color:var(--text2);font-weight:500">Theme preference is saved on this device.</p></div>`}</div>`;
+  return`
+  <div class="page-header"><h1>Settings</h1></div>
+  <div class="page-content">
+  <div class="tab-row">
+    <button class="tab-btn${tab==='company'?' active':''}" onclick="ST.settingsTab='company';renderMain()">🏪 Company Info</button>
+    <button class="tab-btn${tab==='terms'?' active':''}" onclick="ST.settingsTab='terms';renderMain()">📋 Bill Terms</button>
+    <button class="tab-btn${tab==='theme'?' active':''}" onclick="ST.settingsTab='theme';renderMain()">🎨 Theme</button>
+  </div>
+  ${tab==='company'?`
+  <div class="card"><div class="card-title">Company Information</div>
+    <div class="tf">${[['Company Name','company_name'],['Address','address'],['Phone','phone'],['Email','email']].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>
+  </div>
+  <div class="card"><div class="card-title">Bank Accounts</div>
+    <div class="two-col">${[1,2].map(n=>`<div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)"><div style="font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px">BANK ${n}</div>${[['Bank Name',`bank${n}_name`],['Account No.',`bank${n}_acc`],['Account Title',`bank${n}_title`]].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>`).join('')}</div>
+    <button class="btn-orange" style="margin-top:14px" onclick="saveSettings()">✓ Save Settings</button>
+  </div>`:tab==='terms'?`
+  <div class="card"><div class="card-title">📋 Terms & Conditions on Bills</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms auto-appear on every printed invoice. Saved to your account — never disappears.</p>
+    <div class="mfield"><label>TERMS & CONDITIONS</label><textarea id="s_terms" style="min-height:200px;line-height:1.8" placeholder="Example:&#10;• Bills without original stamp and signature will not be entertained.&#10;• Please check the device completely before leaving the shop.&#10;• All sales are final. No returns after 24 hours.&#10;• Warranty void if device is physically damaged.">${terms}</textarea></div>
+    <button class="btn-orange" onclick="saveTerms()">✓ Save Terms</button>
+    <div id="termsSavedMsg" style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600"></div>
+    ${terms?`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-top:14px;border:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Preview on invoice:</div><div style="font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.8">${terms}</div></div>`:''}
+  </div>`:`
+  <div class="card"><div class="card-title">App Theme</div>
+    <div class="theme-toggle">
+      <button class="theme-btn${THEME==='dark'?' active':''}" onclick="applyTheme('dark');renderMain()">🌙 Dark Mode</button>
+      <button class="theme-btn${THEME==='light'?' active':''}" onclick="applyTheme('light');renderMain()">☀️ Light Mode</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);font-weight:500">Theme preference is saved on this device.</p>
+  </div>`}
+  </div>`;
 }
-async function saveSettings(){
-  const g=id=>document.getElementById(id)?.value||'';const uid=CU.id;
-  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title'),terms:D.settings?.terms||'',opening_balances:D.settings?.opening_balances||{}};
-  const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
-  const res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
-  if(!res)return alert('Save failed');
-  await loadAll();alert('Settings saved ✓');
-}
+
 async function saveTerms(){
   const v=document.getElementById('s_terms')?.value||'';
   const uid=CU.id;
   const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
-  const res=exists&&exists.length>0?await api('PATCH','settings',{terms:v},`user_id=eq.${uid}`):await api('POST','settings',{user_id:uid,terms:v});
-  if(!res){ const el=document.getElementById('termsSavedMsg'); if(el){el.textContent='❌ Save failed. Please try again.';el.style.color='var(--red)';} return; }
+  const res=exists&&exists.length>0
+    ?await api('PATCH','settings',{terms:v},`user_id=eq.${uid}`)
+    :await api('POST','settings',{user_id:uid,terms:v});
+  if(!res){
+    const el=document.getElementById('termsSavedMsg');
+    if(el){el.textContent='❌ Save failed. Please try again.';el.style.color='var(--red)';}
+    return;
+  }
+  // update local D.settings immediately so preview shows without reload
   if(D.settings) D.settings.terms=v;
-  const el=document.getElementById('termsSavedMsg'); if(el) el.textContent='✓ Terms saved to your account! Appears on all invoices.';
+  const el=document.getElementById('termsSavedMsg');
+  if(el) el.textContent='✓ Terms saved to your account! Appears on all invoices.';
   setTimeout(()=>renderMain(),1400);
 }
 
-// ---- STOCK PURCHASE MODAL (new) ----
+// ---- STOCK PURCHASE MODAL ----
 function openStockModal(){
   stockUnits=[];
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:580px"><h3>🚚 New Stock Purchase</h3><div class="tf"><div class="mfield"><label>DATE</label><input type="date" id="sp_date" value="${today()}"></div><div class="mfield"><label>PURCHASE ID</label><input id="sp_pid" value="PUR-${String(D.stockPurchases.length+1).padStart(3,'0')}"></div></div><div class="mfield"><label>SUPPLIER</label><div class="suggest-wrap"><input id="sp_supplier_name" placeholder="Type or select from your suppliers list..." oninput="filterSuggest('sp_supplier_name','sp_supplier_id',D.suppliers,'name','id')"><input type="hidden" id="sp_supplier_id"><div id="sp_supplier_name_suggest" class="suggest-list" style="display:none"></div></div></div><div class="mfield"><label>NOTES</label><textarea id="sp_notes" placeholder="Notes about this purchase..."></textarea></div><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Units Received</div><div id="stockUnitsWrap"></div><button onclick="addStockUnit()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:12px;font-weight:700">+ Add Unit</button><div class="mbtns"><button class="bsave" onclick="saveStockPurchase()">💾 Save Purchase</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:580px">
+    <h3>🚚 New Stock Purchase</h3>
+    <div class="tf">
+      <div class="mfield"><label>DATE</label><input type="date" id="sp_date" value="${today()}"></div>
+      <div class="mfield"><label>PURCHASE ID</label><input id="sp_pid" value="PUR-${String(D.stockPurchases.length+1).padStart(3,'0')}"></div>
+    </div>
+    <div class="mfield"><label>SUPPLIER</label>
+      <div class="suggest-wrap">
+        <input id="sp_supplier_name" placeholder="Type or select from your suppliers list..." oninput="filterSuggest('sp_supplier_name','sp_supplier_id',D.suppliers,'name','id')">
+        <input type="hidden" id="sp_supplier_id">
+        <div id="sp_supplier_name_suggest" class="suggest-list" style="display:none"></div>
+      </div>
+    </div>
+    <div class="mfield"><label>NOTES</label><textarea id="sp_notes" placeholder="Notes about this purchase..."></textarea></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Units Received</div>
+    <div id="stockUnitsWrap"></div>
+    <button onclick="addStockUnit()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:12px;font-weight:700">+ Add Unit</button>
+    <div class="mbtns"><button class="bsave" onclick="saveStockPurchase()">💾 Save Purchase</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
   document.body.appendChild(div);
   addStockUnit();
 }
-function addStockUnit(){ stockUnits.push({device_id:'',color:'',storage:'',condition:'New',serial:'',imei:'',cost:''}); refreshStockUnits(); }
+
+function addStockUnit(){
+  stockUnits.push({device_id:'',color:'',storage:'',condition:'New',serial:'',imei:'',cost:''});
+  refreshStockUnits();
+}
 function refreshStockUnits(){
   const wrap=document.getElementById('stockUnitsWrap');if(!wrap)return;
   const deviceOpts=D.devices.map(d=>`<option value="${d.id}" data-cost="${d.base_cost}">${d.name} (${d.category})</option>`).join('');
   if(!deviceOpts){wrap.innerHTML='<div style="color:var(--red);font-size:12px;margin-bottom:10px;font-weight:600">⚠️ No devices found. Please add devices in Device Catalog first.</div>';return;}
-  wrap.innerHTML=stockUnits.map((u,i)=>`<div class="unit-row"><div class="unit-title"><span>Unit ${i+1}</span><button onclick="stockUnits.splice(${i},1);refreshStockUnits()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button></div><div class="tf"><div class="mfield"><label>DEVICE</label><select onchange="stockUnits[${i}].device_id=this.value;stockUnits[${i}].cost=this.options[this.selectedIndex]?.dataset?.cost||'';refreshStockUnits()"><option value="">Select device...</option>${deviceOpts}</select></div><div class="mfield"><label>COST PRICE (RS.)</label><input type="number" value="${u.cost}" oninput="stockUnits[${i}].cost=this.value" placeholder="Cost..."></div><div class="mfield"><label>COLOR</label><input value="${u.color}" oninput="stockUnits[${i}].color=this.value" placeholder="e.g. Black"></div><div class="mfield"><label>STORAGE</label><input value="${u.storage}" oninput="stockUnits[${i}].storage=this.value" placeholder="e.g. 256GB"></div><div class="mfield"><label>SERIAL NUMBER</label><input value="${u.serial}" oninput="stockUnits[${i}].serial=this.value" placeholder="SN..."></div><div class="mfield"><label>IMEI</label><input value="${u.imei}" oninput="stockUnits[${i}].imei=this.value" placeholder="IMEI..."></div></div><div class="mfield" style="margin-top:4px"><label>CONDITION</label><select onchange="stockUnits[${i}].condition=this.value"><option${u.condition==='New'?' selected':''}>New</option><option${u.condition==='Used'?' selected':''}>Used</option><option${u.condition==='Refurbished'?' selected':''}>Refurbished</option></select></div></div>`).join('');
+  wrap.innerHTML=stockUnits.map((u,i)=>`
+    <div class="unit-row">
+      <div class="unit-title"><span>Unit ${i+1}</span><button onclick="stockUnits.splice(${i},1);refreshStockUnits()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button></div>
+      <div class="tf">
+        <div class="mfield"><label>DEVICE</label><select onchange="stockUnits[${i}].device_id=this.value;stockUnits[${i}].cost=this.options[this.selectedIndex]?.dataset?.cost||'';refreshStockUnits()">
+          <option value="">Select device...</option>${deviceOpts}
+        </select></div>
+        <div class="mfield"><label>COST PRICE (RS.)</label><input type="number" value="${u.cost}" oninput="stockUnits[${i}].cost=this.value" placeholder="Cost..."></div>
+        <div class="mfield"><label>COLOR</label><input value="${u.color}" oninput="stockUnits[${i}].color=this.value" placeholder="e.g. Black"></div>
+        <div class="mfield"><label>STORAGE</label><input value="${u.storage}" oninput="stockUnits[${i}].storage=this.value" placeholder="e.g. 256GB"></div>
+        <div class="mfield"><label>SERIAL NUMBER</label><input value="${u.serial}" oninput="stockUnits[${i}].serial=this.value" placeholder="SN..."></div>
+        <div class="mfield"><label>IMEI</label><input value="${u.imei}" oninput="stockUnits[${i}].imei=this.value" placeholder="IMEI..."></div>
+      </div>
+      <div class="mfield" style="margin-top:4px"><label>CONDITION</label><select onchange="stockUnits[${i}].condition=this.value"><option${u.condition==='New'?' selected':''}>New</option><option${u.condition==='Used'?' selected':''}>Used</option><option${u.condition==='Refurbished'?' selected':''}>Refurbished</option></select></div>
+    </div>`).join('');
 }
+
 async function saveStockPurchase(){
   const date=document.getElementById('sp_date')?.value;
   const pid=document.getElementById('sp_pid')?.value;
@@ -813,21 +1160,62 @@ async function saveStockPurchase(){
   closeModal();await loadAll();renderMain();
 }
 
-// ---- BILL MODAL (new invoice) ----
+// ---- BILL MODAL ----
 function openBillModal(){
   billItems=[];
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px"><h3>🧾 New Invoice</h3><div class="tf"><div class="mfield"><label>CUSTOMER NAME</label><div class="suggest-wrap"><input id="bill_cust_name" placeholder="Type or select customer..." oninput="filterSuggest('bill_cust_name','bill_cust_id',D.customers,'name','id')"><input type="hidden" id="bill_cust_id"><div id="bill_cust_name_suggest" class="suggest-list" style="display:none"></div></div></div><div class="mfield"><label>CUSTOMER PHONE</label><input id="bill_cust_phone" placeholder="For WhatsApp share..."></div></div><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Items — Search inventory by IMEI/Serial</div><div id="billItemsWrap"></div><button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button><div class="mfield"><label>EXTRA NOTES / DESCRIPTION (appears on invoice)</label><textarea id="bill_notes" placeholder="Warranty, return policy, accessories, any extra info..."></textarea></div><div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div><div class="mfield"><label>PAYMENT STATUS</label><select id="bill_pay_status" onchange="togglePaymentFields()"><option value="Unpaid">Unpaid — Full amount due</option><option value="Partial">Partial — Customer paid some now</option><option value="Cleared">Cleared — Fully paid</option></select></div><div id="partialPayFields" style="display:none"><div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="bill_amount_paid" placeholder="How much paid now..." oninput="updateBillBalance()"></div><div id="billBalanceRow" style="display:none;background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px"><div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE</div><div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">Rs. 0</div></div></div></div><div class="mbtns"><button class="bsave" onclick="saveBill()">Create Invoice</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
+    <h3>🧾 New Invoice</h3>
+    <div class="tf">
+      <div class="mfield"><label>CUSTOMER NAME</label>
+        <div class="suggest-wrap">
+          <input id="bill_cust_name" placeholder="Type or select customer..." oninput="filterSuggest('bill_cust_name','bill_cust_id',D.customers,'name','id')">
+          <input type="hidden" id="bill_cust_id">
+          <div id="bill_cust_name_suggest" class="suggest-list" style="display:none"></div>
+        </div>
+      </div>
+      <div class="mfield"><label>CUSTOMER PHONE</label><input id="bill_cust_phone" placeholder="For WhatsApp share..."></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Items — Search inventory by IMEI/Serial</div>
+    <div id="billItemsWrap"></div>
+    <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
+    <div class="mfield"><label>EXTRA NOTES / DESCRIPTION (appears on invoice)</label><textarea id="bill_notes" placeholder="Warranty, return policy, accessories, any extra info..."></textarea></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div>
+      <div class="mfield"><label>PAYMENT STATUS</label>
+        <select id="bill_pay_status" onchange="togglePaymentFields()">
+          <option value="Unpaid">Unpaid — Full amount due</option>
+          <option value="Partial">Partial — Customer paid some now</option>
+          <option value="Cleared">Cleared — Fully paid</option>
+        </select>
+      </div>
+      <div id="partialPayFields" style="display:none">
+        <div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="bill_amount_paid" placeholder="How much paid now..." oninput="updateBillBalance()"></div>
+        <div id="billBalanceRow" style="display:none;background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px">
+          <div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE</div>
+          <div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">Rs. 0</div>
+        </div>
+      </div>
+    </div>
+    <div class="mbtns"><button class="bsave" onclick="saveBill()">Create Invoice</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
   document.body.appendChild(div);
   addBillItem();
 }
+
 function togglePaymentFields(){
   const status=document.getElementById('bill_pay_status')?.value;
   const partial=document.getElementById('partialPayFields');
   if(partial) partial.style.display=status==='Partial'?'block':'none';
+  if(status==='Cleared'){
+    const inp=document.getElementById('bill_amount_paid');
+    // will be set to total on save
+  }
 }
+
 function updateBillBalance(){
+  // compute current total from bill items
   billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=el.value;});
   const total=billItems.reduce((a,i)=>a+Number(i.sale_price||0),0);
   const paid=Number(document.getElementById('bill_amount_paid')?.value||0);
@@ -837,19 +1225,42 @@ function updateBillBalance(){
   if(row) row.style.display=paid>0?'block':'none';
   if(amt) amt.textContent=`Rs. ${Math.max(0,bal).toLocaleString()}`;
 }
-function addBillItem(){ billItems.push({inv_id:null,device_name:'',serial:'',imei:'',sale_price:'',cost_price:0,search:''}); refreshBillItems(); }
+
+function addBillItem(){
+  billItems.push({inv_id:null,device_name:'',serial:'',imei:'',sale_price:'',cost_price:0,search:''});
+  refreshBillItems();
+}
 function refreshBillItems(){
   const wrap=document.getElementById('billItemsWrap');if(!wrap)return;
-  wrap.innerHTML=billItems.map((item,i)=>`<div class="unit-row"><div class="unit-title"><span>Item ${i+1}</span><button onclick="billItems.splice(${i},1);refreshBillItems()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕</button></div><div class="mfield"><label>SEARCH BY IMEI / SERIAL / DEVICE NAME</label><div class="suggest-wrap"><input id="bi_search_${i}" value="${item.search||''}" placeholder="Type IMEI, serial or device name..." oninput="searchInventory(${i},this.value)"><div id="bi_suggest_${i}" class="suggest-list" style="display:none"></div></div></div>${item.inv_id?`<div class="info-badge">✓ ${item.device_name}${item.serial?' · SN:'+item.serial:''}${item.imei?' · IMEI:'+item.imei:''}</div>`:''}<div class="mfield"><label>SALE PRICE (RS.) — ENTER MANUAL PER DEAL</label><input type="number" id="bi_price_${i}" value="${item.sale_price||''}" oninput="billItems[${i}].sale_price=this.value" placeholder="Enter agreed sale price..."></div></div>`).join('');
+  wrap.innerHTML=billItems.map((item,i)=>`
+    <div class="unit-row">
+      <div class="unit-title"><span>Item ${i+1}</span><button onclick="billItems.splice(${i},1);refreshBillItems()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕</button></div>
+      <div class="mfield"><label>SEARCH BY IMEI / SERIAL / DEVICE NAME</label>
+        <div class="suggest-wrap">
+          <input id="bi_search_${i}" value="${item.search||''}" placeholder="Type IMEI, serial or device name..." oninput="searchInventory(${i},this.value)">
+          <div id="bi_suggest_${i}" class="suggest-list" style="display:none"></div>
+        </div>
+      </div>
+      ${item.inv_id?`<div class="info-badge">✓ ${item.device_name}${item.serial?' · SN:'+item.serial:''}${item.imei?' · IMEI:'+item.imei:''}</div>`:''}
+      <div class="mfield"><label>SALE PRICE (RS.) — ENTER MANUAL PER DEAL</label><input type="number" id="bi_price_${i}" value="${item.sale_price||''}" oninput="billItems[${i}].sale_price=this.value" placeholder="Enter agreed sale price..."></div>
+    </div>`).join('');
 }
+
 function searchInventory(idx,query){
   const suggestEl=document.getElementById(`bi_suggest_${idx}`);
   if(!query||query.length<1){if(suggestEl)suggestEl.style.display='none';return;}
-  const results=D.inventory.filter(i=>i.status==='Available'&&((i.imei||'').toLowerCase().includes(query.toLowerCase())||(i.serial||'').toLowerCase().includes(query.toLowerCase())||(i.device_name||'').toLowerCase().includes(query.toLowerCase()))).slice(0,8);
+  const results=D.inventory.filter(i=>i.status==='Available'&&(
+    (i.imei||'').toLowerCase().includes(query.toLowerCase())||
+    (i.serial||'').toLowerCase().includes(query.toLowerCase())||
+    (i.device_name||'').toLowerCase().includes(query.toLowerCase())
+  )).slice(0,8);
   if(!suggestEl)return;
   if(results.length===0){suggestEl.innerHTML='<div class="suggest-item" style="color:var(--text3)">No available units found</div>';suggestEl.style.display='block';return;}
   suggestEl.style.display='block';
-  suggestEl.innerHTML=results.map(r=>`<div class="suggest-item" onclick="selectInventoryItem(${idx},${r.id})"><b>${r.device_name}</b>${r.color?' · '+r.color:''}${r.storage?' · '+r.storage:''}<br><span style="font-size:11px;color:var(--text3)">${r.serial?'SN: '+r.serial+' ':''}${r.imei?'IMEI: '+r.imei:''} · Cost: ${fmt(r.cost_price)}</span></div>`).join('');
+  suggestEl.innerHTML=results.map(r=>`<div class="suggest-item" onclick="selectInventoryItem(${idx},${r.id})">
+    <b>${r.device_name}</b>${r.color?' · '+r.color:''}${r.storage?' · '+r.storage:''}<br>
+    <span style="font-size:11px;color:var(--text3)">${r.serial?'SN: '+r.serial+' ':''}${r.imei?'IMEI: '+r.imei:''} · Cost: ${fmt(r.cost_price)}</span>
+  </div>`).join('');
 }
 function selectInventoryItem(idx,invId){
   const inv=D.inventory.find(i=>i.id===invId);if(!inv)return;
@@ -858,6 +1269,7 @@ function selectInventoryItem(idx,invId){
   refreshBillItems();
   setTimeout(()=>{const p=document.getElementById(`bi_price_${idx}`);if(p)p.value=billItems[idx].sale_price||'';},30);
 }
+
 async function saveBill(){
   const custName=document.getElementById('bill_cust_name')?.value?.trim();
   const custPhone=document.getElementById('bill_cust_phone')?.value?.trim()||'';
@@ -876,14 +1288,25 @@ async function saveBill(){
   const timePart=String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0');
   const billId=`INV-${datePart}-${timePart}`;
   const custId=document.getElementById('bill_cust_id')?.value||null;
+  // Try with new columns first, fallback to basic columns if it fails
   let res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amountPaid,balance});
-  if(!res||!res[0]){ res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes}); if(!res||!res[0])return alert('Failed to create invoice. Please try again.'); }
-  for(const item of validItems){ if(item.inv_id)await api('PATCH','inventory',{status:'Sold',sold_invoice:billId},`id=eq.${item.inv_id}`); }
-  if(amountPaid>0&&custId){ await api('POST','customer_payments',{user_id:CU.id,customer_id:Number(custId),customer_name:custName,amount:amountPaid,payment_method:'Cash',note:`Payment on ${billId}`,date:today()}); }
+  if(!res||!res[0]){
+    // Fallback: bills table may not have new columns yet — save without them
+    res=await api('POST','bills',{id:billId,user_id:CU.id,customer_name:custName,customer_phone:custPhone,date:today(),items:validItems,total,profit:total-cost,notes});
+    if(!res||!res[0])return alert('Failed to create invoice. Please try again.');
+  }
+  // Mark inventory units as sold
+  for(const item of validItems){
+    if(item.inv_id)await api('PATCH','inventory',{status:'Sold',sold_invoice:billId},`id=eq.${item.inv_id}`);
+  }
+  // Auto-add to customer ledger if partial or cleared payment
+  if(amountPaid>0&&custId){
+    await api('POST','customer_payments',{user_id:CU.id,customer_id:Number(custId),customer_name:custName,amount:amountPaid,payment_method:'Cash',note:`Payment on ${billId}`,date:today()});
+  }
   closeModal();await loadAll();renderMain();
 }
 
-// ---- HELPER: filterSuggest, showBillDetail, waBill, previewBill, printBill, confirm helpers, etc. ----
+// SUGGEST HELPER
 function filterSuggest(inputId,hiddenId,list,labelField,valueField){
   const query=document.getElementById(inputId)?.value?.toLowerCase()||'';
   const el=document.getElementById(inputId+'_suggest');if(!el)return;
@@ -900,5 +1323,532 @@ function selectSuggest(inputId,hiddenId,label,value){
   if(inputId==='bill_cust_name'){const c=D.customers.find(x=>String(x.id)===String(value));if(c?.phone){const ph=document.getElementById('bill_cust_phone');if(ph&&!ph.value)ph.value=c.phone;}}
 }
 
+// BILL DETAIL
 function showBillDetail(id){
-  const b=D.bills.find(x=>
+  const b=D.bills.find(x=>x.id===id);if(!b)return;
+  const s=D.settings||{};const items=b.items||[];
+  const bal=Number(b.balance||0);const paid=Number(b.amount_paid||0);
+  const status=b.pay_status||'Unpaid';
+  const div=document.createElement('div');div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:520px">
+    <div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px">
+      <div style="font-size:18px;font-weight:800;color:var(--orange)">${s.company_name||'iVault'}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px">${s.address||''} · ${s.phone||''}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Invoice</div><div style="font-weight:800;color:var(--orange)">${b.id}</div></div>
+      <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Date</div><div style="font-weight:700">${b.date}</div></div>
+      <div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Customer</div><div style="font-weight:700">${b.customer_name}</div></div>
+    </div>
+    <div class="tbl-wrap"><table class="tbl" style="margin-bottom:12px">
+      <thead><tr><th>Device</th><th>Serial / IMEI</th><th>Price</th></tr></thead>
+      <tbody>${items.map(i=>`<tr><td style="font-weight:700">${i.device_name||i.name||'—'}</td><td style="font-size:11px;color:var(--text3)">${i.serial?'SN:'+i.serial:''}${i.imei?' IMEI:'+i.imei:''}</td><td style="font-weight:800;color:var(--green)">${fmt(i.sale_price||i.price)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div style="text-align:right;font-size:18px;font-weight:800;color:var(--green);margin-bottom:6px">Total: ${fmt(b.total)}</div>
+    ${paid>0?`<div style="text-align:right;font-size:13px;margin-bottom:4px;color:var(--text2)">Paid: <b style="color:var(--green)">${fmt(paid)}</b></div><div style="text-align:right;font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">Balance: ${fmt(bal)}</div>`:''}
+    <div style="margin-bottom:12px"><span class="badge ${status==='Cleared'?'badge-green':status==='Partial'?'badge-amber':'badge-red'}">${status}</span></div>
+    ${b.notes?`<div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px;font-weight:500;border:1px solid var(--border)"><b>Notes:</b> ${b.notes}</div>`:''}
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text3);margin-bottom:14px;border:1px solid var(--border)">
+      <div style="font-weight:700;color:var(--text2);margin-bottom:6px">Bank Details</div>
+      <div>${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}</div>
+      <div style="margin-top:4px">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+    </div>
+    <div class="mbtns">
+      <button class="bsave" onclick="this.closest('.modal-ov').remove();previewBill('${b.id}')">👁 Preview & Print</button>
+      <button class="btn-wa" style="flex:1;padding:11px;border-radius:10px;font-size:13px" onclick="waBill('${b.id}')">💬 WhatsApp</button>
+      <button class="bcancel" onclick="this.closest('.modal-ov').remove()">Close</button>
+    </div>
+  </div>`;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
+function waBill(id){
+  const b=D.bills.find(x=>x.id===id);if(!b)return;
+  const s=D.settings||{};
+  const items=(b.items||[]).map(i=>`• ${i.device_name||i.name||'Item'}${i.serial?' (SN:'+i.serial+')':''} — Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}`).join('\n');
+  const msg=`🔐 *${s.company_name||'iVault'}*\n\n📋 *Invoice: ${b.id}*\n📅 Date: ${b.date}\n👤 Customer: ${b.customer_name}\n\n*Items:*\n${items}\n\n💰 *Total: Rs. ${Number(b.total).toLocaleString()}*\n\n🏦 *Bank Details:*\n${s.bank1_name||'Bank 1'}: ${s.bank1_acc||'—'}\n${s.bank2_name||'Bank 2'}: ${s.bank2_acc||'—'}${b.notes?'\n\n📝 '+b.notes:''}`;
+  const phone=(b.customer_phone||'').replace(/[^0-9]/g,'');
+  window.open(phone?`https://wa.me/92${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+function previewBill(id){
+  const b=D.bills.find(x=>x.id===id);const s=D.settings||{};if(!b)return;
+  const terms=s.terms||'';
+  const items=b.items||[];
+  const amtPaid=Number(b.amount_paid||0);
+  const bal=Number(b.balance||0);
+  const div=document.createElement('div');div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:560px">
+    <h3>🖨 Print Preview — ${b.id}</h3>
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;text-transform:uppercase">Page Size</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${['A4','A5','Thermal 80mm'].map(sz=>`<button onclick="document.querySelectorAll('.sz-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');selectedPaperSize='${sz}'" class="sz-btn tab-btn${sz==='A5'?' active':''}" style="font-size:12px;padding:6px 14px">${sz}</button>`).join('')}
+      </div>
+    </div>
+    <!-- PREVIEW (white paper) -->
+    <div style="background:#fff;border:1px solid #ccc;border-radius:4px;padding:20px 22px;color:#111;font-family:Arial,sans-serif;font-size:12px;max-height:480px;overflow-y:auto;line-height:1.5">
+      <!-- 1. HEADER: Shop name only, big & bold -->
+      <div style="text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px">
+        <div style="font-size:22px;font-weight:900;letter-spacing:.5px">${s.company_name||'iVault'}</div>
+      </div>
+      <!-- 2. Invoice / Date / Customer -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;font-size:11px">
+        <div><div style="font-weight:700;text-transform:uppercase;font-size:9px;color:#555">Invoice</div><div style="font-weight:800;font-size:13px">${b.id}</div></div>
+        <div><div style="font-weight:700;text-transform:uppercase;font-size:9px;color:#555">Date</div><div style="font-weight:700;font-size:13px">${b.date}</div></div>
+        <div><div style="font-weight:700;text-transform:uppercase;font-size:9px;color:#555">Customer</div><div style="font-weight:800;font-size:13px">${b.customer_name}</div></div>
+      </div>
+      <!-- 3. Items table -->
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:0">
+        <thead><tr style="border-top:1.5px solid #111;border-bottom:1.5px solid #111">
+          <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;text-transform:uppercase">Device</th>
+          <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;text-transform:uppercase">Serial No.</th>
+          <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;text-transform:uppercase">IMEI</th>
+          <th style="text-align:right;padding:6px 4px;font-size:10px;font-weight:700;text-transform:uppercase">Price</th>
+        </tr></thead>
+        <tbody>${items.map(i=>`<tr style="border-bottom:1px solid #eee"><td style="padding:7px 4px;font-weight:700">${i.device_name||i.name||'—'}</td><td style="padding:7px 4px;color:#444">${i.serial||'—'}</td><td style="padding:7px 4px;color:#444">${i.imei||'—'}</td><td style="padding:7px 4px;font-weight:800;text-align:right">Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table>
+      <!-- 4. Totals -->
+      <div style="border-top:1.5px solid #111;padding-top:8px;margin-top:2px;text-align:right">
+        <div style="font-size:15px;font-weight:900">Total: Rs. ${Number(b.total).toLocaleString()}</div>
+        ${amtPaid>0?`<div style="font-size:13px;margin-top:3px">Paid: <b>Rs. ${amtPaid.toLocaleString()}</b></div><div style="font-size:14px;font-weight:800;margin-top:2px">Balance Due: Rs. ${bal.toLocaleString()}</div>`:''}
+      </div>
+      ${b.notes?`<div style="border:1px solid #ddd;border-radius:4px;padding:8px;font-size:11px;margin-top:10px"><b>Notes:</b> ${b.notes}</div>`:''}
+      <!-- 5. Terms & Conditions -->
+      ${terms?`<div style="border-top:1px solid #ddd;margin-top:12px;padding-top:10px"><div style="font-size:11px;font-weight:800;margin-bottom:5px">Terms & Conditions:</div><div style="font-size:10px;color:#333;white-space:pre-line;line-height:1.7">${terms}</div></div>`:''}
+      <!-- 6. Bank details -->
+      <div style="border-top:1px solid #ddd;margin-top:12px;padding-top:10px;font-size:11px">
+        <div style="font-weight:800;margin-bottom:5px">Bank Details:</div>
+        <div>${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}</div>
+        <div style="margin-top:3px">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+      </div>
+      <!-- 7. Address & Contact -->
+      <div style="border-top:1px solid #ddd;margin-top:12px;padding-top:8px;font-size:10px;color:#444;text-align:center">
+        ${s.address||''}${s.phone?' · '+s.phone:''}${s.email?' / '+s.email:''}
+      </div>
+      <!-- 8. Stamp only (right side) -->
+      <div style="display:flex;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid #ddd">
+        <div style="text-align:center;width:180px">
+          <div style="height:50px;border:1.5px dashed #aaa;border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center"><span style="font-size:10px;color:#bbb">Official Stamp</span></div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase">Authorized Signature & Stamp</div>
+          <div style="font-size:9px;color:#666;margin-top:2px">${s.company_name||''}</div>
+        </div>
+      </div>
+      <!-- 9. Thank you -->
+      <div style="text-align:center;margin-top:14px;font-size:11px;color:#666;border-top:1px solid #eee;padding-top:10px">
+        Thank you for your business! — <b>${s.company_name||'iVault'}</b>
+      </div>
+    </div>
+    <div class="mbtns" style="margin-top:14px">
+      <button class="bsave" onclick="printBill('${b.id}')">🖨 Print</button>
+      <button class="btn-wa" style="flex:1;padding:11px;border-radius:10px;font-size:13px" onclick="waBill('${b.id}')">💬 WhatsApp</button>
+      <button class="bcancel" onclick="this.closest('.modal-ov').remove()">Close</button>
+    </div>
+  </div>`;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+let selectedPaperSize='A5';
+
+function printBill(id){
+  const b=D.bills.find(x=>x.id===id);const s=D.settings||{};if(!b)return;
+  const terms=s.terms||'';
+  const items=b.items||[];
+  const size=selectedPaperSize||'A5';
+  const amtPaid=Number(b.amount_paid||0);
+  const bal=Number(b.balance||0);
+  const isTherm=size==='Thermal 80mm';
+  const isA5=size==='A5';
+  const pgCSS=isTherm?'@page{size:80mm auto;margin:3mm 4mm}body{max-width:72mm}'
+    :isA5?'@page{size:A5;margin:10mm}body{max-width:138mm}'
+    :'@page{size:A4;margin:15mm}body{max-width:185mm}';
+  const fs=isTherm?'10px':isA5?'11px':'12px';
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>${b.id}</title><style>
+  ${pgCSS}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{font-family:Arial,sans-serif;color:#000;margin:0;font-size:${fs};line-height:1.5}
+  .hdr{text-align:center;border-bottom:2px solid #000;padding-bottom:${isTherm?'6px':'10px'};margin-bottom:${isTherm?'8px':'14px'}}
+  .shop-name{font-size:${isTherm?'16px':isA5?'20px':'24px'};font-weight:900;letter-spacing:.5px}
+  .meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:${isTherm?'8px':'12px'};font-size:${isTherm?'9px':fs}}
+  .ml{font-size:8px;font-weight:700;text-transform:uppercase;color:#555;margin-bottom:2px}
+  .mv{font-weight:800;font-size:${isTherm?'10px':isA5?'12px':'13px'}}
+  table{width:100%;border-collapse:collapse;font-size:${isTherm?'9px':fs}}
+  thead tr{border-top:1.5px solid #000;border-bottom:1.5px solid #000}
+  th{text-align:left;padding:${isTherm?'4px 3px':'6px 6px'};font-size:${isTherm?'8px':'10px'};font-weight:700;text-transform:uppercase}
+  th:last-child{text-align:right}
+  td{padding:${isTherm?'5px 3px':'7px 6px'};border-bottom:1px solid #ddd}
+  td:last-child{text-align:right;font-weight:800}
+  .totals{border-top:1.5px solid #000;padding-top:7px;margin-top:2px;text-align:right}
+  .total-main{font-size:${isTherm?'13px':isA5?'15px':'17px'};font-weight:900;margin-bottom:3px}
+  .paid-line{font-size:${isTherm?'10px':'12px'};margin-bottom:2px}
+  .bal-line{font-size:${isTherm?'11px':'14px'};font-weight:900}
+  .notes-box{border:1px solid #ccc;border-radius:3px;padding:7px;font-size:${isTherm?'8px':'10px'};margin-top:10px}
+  .section{border-top:1px solid #ccc;margin-top:${isTherm?'8px':'12px'};padding-top:${isTherm?'7px':'9px'}}
+  .section-title{font-size:${isTherm?'9px':'11px'};font-weight:800;margin-bottom:5px}
+  .terms-text{font-size:${isTherm?'7px':'9px'};color:#333;line-height:1.7;white-space:pre-line}
+  .bank-line{font-size:${isTherm?'9px':'10px'};margin-bottom:3px}
+  .contact-line{font-size:${isTherm?'8px':'10px'};color:#444;text-align:center;margin-top:3px}
+  .stamp-area{display:flex;justify-content:flex-end;margin-top:${isTherm?'12px':'18px'};padding-top:${isTherm?'8px':'12px'};border-top:1px solid #ccc}
+  .stamp-box{text-align:center;width:${isTherm?'110px':'175px'}}
+  .stamp-inner{height:${isTherm?'40px':'52px'};border:1.5px dashed #999;border-radius:3px;margin-bottom:5px;display:flex;align-items:center;justify-content:center}
+  .stamp-label{font-size:${isTherm?'7px':'9px'};font-weight:700;text-transform:uppercase}
+  .stamp-co{font-size:${isTherm?'7px':'9px'};color:#555;margin-top:2px}
+  .thankyou{text-align:center;margin-top:${isTherm?'10px':'14px'};padding-top:8px;border-top:1px solid #ddd;font-size:${isTherm?'9px':'11px'};color:#444}
+  </style></head><body>
+
+  <!-- 1. HEADER: Shop name -->
+  <div class="hdr"><div class="shop-name">${s.company_name||'iVault'}</div></div>
+
+  <!-- 2. Invoice / Date / Customer -->
+  <div class="meta">
+    <div><div class="ml">Invoice</div><div class="mv">${b.id}</div></div>
+    <div><div class="ml">Date</div><div class="mv">${b.date}</div></div>
+    <div><div class="ml">Customer</div><div class="mv">${b.customer_name}</div></div>
+  </div>
+
+  <!-- 3. Items table -->
+  <table>
+    <thead><tr>
+      <th>Device</th>
+      ${!isTherm?'<th>Serial No.</th><th>IMEI</th>':''}
+      <th style="text-align:right">Price</th>
+    </tr></thead>
+    <tbody>
+    ${items.map(i=>`<tr>
+      <td><b>${i.device_name||i.name||'—'}</b>${isTherm&&i.serial?`<br><span style="font-size:8px;color:#555">SN:${i.serial}</span>`:''}${isTherm&&i.imei?`<br><span style="font-size:8px;color:#555">IMEI:${i.imei}</span>`:''}</td>
+      ${!isTherm?`<td style="color:#444">${i.serial||'—'}</td><td style="color:#444">${i.imei||'—'}</td>`:''}
+      <td>Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td>
+    </tr>`).join('')}
+    </tbody>
+  </table>
+
+  <!-- 4. Totals -->
+  <div class="totals">
+    <div class="total-main">Total: Rs. ${Number(b.total).toLocaleString()}</div>
+    ${amtPaid>0?`<div class="paid-line">Paid: <b>Rs. ${amtPaid.toLocaleString()}</b></div><div class="bal-line">Balance Due: Rs. ${bal.toLocaleString()}</div>`:''}
+  </div>
+
+  ${b.notes?`<div class="notes-box"><b>Notes:</b> ${b.notes}</div>`:''}
+
+  <!-- 5. Terms & Conditions (auto from settings) -->
+  ${terms?`<div class="section"><div class="section-title">Terms & Conditions:</div><div class="terms-text">${terms}</div></div>`:''}
+
+  <!-- 6. Bank Details -->
+  <div class="section">
+    <div class="section-title">Bank Details:</div>
+    <div class="bank-line">${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}</div>
+    <div class="bank-line">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+  </div>
+
+  <!-- 7. Contact & Address -->
+  <div class="section contact-line">
+    ${[s.address,s.phone,s.email].filter(Boolean).join(' · ')}
+  </div>
+
+  <!-- 8. Official Stamp (right aligned) -->
+  <div class="stamp-area">
+    <div class="stamp-box">
+      <div class="stamp-inner"><span style="font-size:${isTherm?'8px':'10px'};color:#bbb">Official Stamp</span></div>
+      <div class="stamp-label">Authorized Signature & Stamp</div>
+      <div class="stamp-co">${s.company_name||''}</div>
+    </div>
+  </div>
+
+  <!-- 9. Thank you -->
+  <div class="thankyou">Thank you for your business! — <b>${s.company_name||'iVault'}</b></div>
+
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+// CONFIRM DELETE — global modal
+function confirmDel(table,id){
+  const labels={devices:'device',customers:'customer',suppliers:'supplier',expenses:'expense',repairs:'repair job'};
+  showConfirm(`Delete this ${labels[table]||'item'}? This cannot be undone.`,()=>delRow(table,id));
+}
+function confirmDelBill(id){showConfirm('Delete this invoice permanently? Sold inventory items will be marked available again.',()=>delBill(id));}
+function confirmDelPurchase(id){showConfirm('Delete this purchase? All associated inventory units will also be deleted.',()=>delPurchase(id));}
+function showConfirm(msg,onYes){
+  const old=document.getElementById('confirmModal');if(old)old.remove();
+  const div=document.createElement('div');div.id='confirmModal';div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:380px;text-align:center">
+    <div style="font-size:36px;margin-bottom:10px">⚠️</div>
+    <h3 style="margin-bottom:10px;color:var(--text)">Are you sure?</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;font-weight:500">${msg}</p>
+    <div style="display:flex;gap:10px">
+      <button style="flex:1;padding:11px;background:var(--red);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700" onclick="document.getElementById('confirmModal').remove();(window._confirmYes||function(){})()">Yes, Delete</button>
+      <button class="bcancel" onclick="document.getElementById('confirmModal').remove()">Cancel</button>
+    </div>
+  </div>`;
+  window._confirmYes=onYes;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
+// EDIT BILL — full edit including items
+function openEditBillModal(id){
+  const b=D.bills.find(x=>x.id===id);if(!b)return;
+  // load existing items into billItems
+  billItems=(b.items||[]).map(i=>({...i,sale_price:i.sale_price||i.price||0,search:i.device_name||i.name||''}));
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
+    <h3>✏️ Edit Invoice — ${b.id}</h3>
+    <div class="tf">
+      <div class="mfield"><label>CUSTOMER NAME</label>
+        <div class="suggest-wrap">
+          <input id="bill_cust_name" value="${b.customer_name||''}" placeholder="Customer name..." oninput="filterSuggest('bill_cust_name','bill_cust_id',D.customers,'name','id')">
+          <input type="hidden" id="bill_cust_id" value="${b.customer_id||''}">
+          <div id="bill_cust_name_suggest" class="suggest-list" style="display:none"></div>
+        </div>
+      </div>
+      <div class="mfield"><label>CUSTOMER PHONE</label><input id="bill_cust_phone" value="${b.customer_phone||''}"></div>
+    </div>
+    <div class="mfield"><label>DATE</label><input type="date" id="bill_edit_date" value="${b.date||today()}"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:4px">Items — Search inventory by IMEI/Serial</div>
+    <div id="billItemsWrap"></div>
+    <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
+    <div class="mfield"><label>EXTRA NOTES</label><textarea id="bill_notes" style="min-height:60px">${b.notes||''}</textarea></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div>
+      <div class="mfield"><label>STATUS</label>
+        <select id="bill_pay_status" onchange="togglePaymentFields()">
+          <option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid — Full amount due</option>
+          <option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial — Customer paid some now</option>
+          <option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared — Fully paid</option>
+        </select>
+      </div>
+      <div id="partialPayFields" style="${b.pay_status==='Partial'?'':'display:none'}">
+        <div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="bill_amount_paid" value="${b.amount_paid||0}" oninput="updateBillBalance()"></div>
+        <div id="billBalanceRow" style="${Number(b.amount_paid)>0?'':'display:none'};background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px">
+          <div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE</div>
+          <div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">${fmt(Number(b.balance||0))}</div>
+        </div>
+      </div>
+    </div>
+    <div class="mbtns"><button class="bsave" onclick="saveEditBill('${b.id}')">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+  document.body.appendChild(div);
+  setTimeout(refreshBillItems,30);
+}
+async function saveEditBill(id){
+  const b=D.bills.find(x=>x.id===id);if(!b)return;
+  const custName=document.getElementById('bill_cust_name')?.value?.trim()||b.customer_name;
+  const custPhone=document.getElementById('bill_cust_phone')?.value?.trim()||'';
+  const custId=document.getElementById('bill_cust_id')?.value||b.customer_id||null;
+  const date=document.getElementById('bill_edit_date')?.value||b.date;
+  const notes=document.getElementById('bill_notes')?.value?.trim()||'';
+  const payStatus=document.getElementById('bill_pay_status')?.value||'Unpaid';
+  // Read current prices from DOM
+  billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=Number(el.value)||0;});
+  const validItems=billItems.filter(item=>Number(item.sale_price)>0);
+  if(validItems.length===0)return alert('Add at least 1 item with a sale price');
+  const total=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
+  const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
+  const amtPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('bill_amount_paid')?.value||0):0;
+  const balance=total-amtPaid;
+  // First restore previously sold items that are being removed
+  const oldInvIds=(b.items||[]).map(i=>i.inv_id).filter(Boolean);
+  const newInvIds=validItems.map(i=>i.inv_id).filter(Boolean);
+  for(const oldId of oldInvIds){
+    if(!newInvIds.includes(oldId)) await api('PATCH','inventory',{status:'Available',sold_invoice:null},`id=eq.${oldId}`);
+  }
+  // Mark new items as sold
+  for(const item of validItems){
+    if(item.inv_id&&!oldInvIds.includes(item.inv_id)) await api('PATCH','inventory',{status:'Sold',sold_invoice:id},`id=eq.${item.inv_id}`);
+  }
+  const res=await api('PATCH','bills',{customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date,items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amtPaid,balance},`id=eq.${id}`);
+  if(!res)return alert('Save failed. Try again.');
+  closeModal();await loadAll();renderMain();
+}
+
+// EDIT STOCK PURCHASE
+function openEditStockModal(id){
+  const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:460px">
+    <h3>✏️ Edit Purchase — ${s.purchase_id||s.id}</h3>
+    <div class="tf">
+      <div class="mfield"><label>DATE</label><input type="date" id="esp_date" value="${s.date||today()}"></div>
+      <div class="mfield"><label>PURCHASE ID</label><input id="esp_pid" value="${s.purchase_id||''}"></div>
+    </div>
+    <div class="mfield"><label>SUPPLIER NAME</label><input id="esp_supplier" value="${s.supplier_name||''}"></div>
+    <div class="mfield"><label>NOTES</label><textarea id="esp_notes">${s.notes||''}</textarea></div>
+    <div class="mbtns"><button class="bsave" onclick="saveEditStock(${id})">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+  document.body.appendChild(div);
+}
+async function saveEditStock(id){
+  const supplier=document.getElementById('esp_supplier')?.value?.trim();
+  if(!supplier)return alert('Supplier name required');
+  const res=await api('PATCH','stock_purchases',{date:document.getElementById('esp_date')?.value,purchase_id:document.getElementById('esp_pid')?.value,supplier_name:supplier,notes:document.getElementById('esp_notes')?.value?.trim()||''},`id=eq.${id}`);
+  if(!res)return alert('Save failed');
+  closeModal();await loadAll();renderMain();
+}
+
+async function delBill(id){
+  if(!confirm('Delete this invoice? Sold inventory items will be marked available again.'))return;
+  const b=D.bills.find(x=>x.id===id);
+  if(b?.items){for(const item of b.items){if(item.inv_id)await api('PATCH','inventory',{status:'Available',sold_invoice:null},`id=eq.${item.inv_id}`);}}
+  await api('DELETE','bills',null,`id=eq.${id}`);
+  await loadAll();renderMain();
+}
+
+function showPurchaseDetail(id){
+  const units=D.inventory.filter(i=>i.purchase_id==id);
+  const div=document.createElement('div');div.className='modal-ov';
+  div.innerHTML=`<div class="modal"><h3>📦 Purchase Units (${units.length})</h3>
+    ${units.length===0?'<div class="empty">No units found</div>':units.map(u=>`<div class="unit-row"><div class="unit-title"><span>${u.device_name}</span><span class="badge ${u.status==='Available'?'badge-green':'badge-purple'}">${u.status}</span></div>
+      <div style="font-size:12px;color:var(--text2);font-weight:500">${[u.color,u.storage,u.condition].filter(Boolean).join(' · ')}</div>
+      ${u.serial?`<div style="font-size:12px;color:var(--text3)">Serial: <b>${u.serial}</b></div>`:''}
+      ${u.imei?`<div style="font-size:12px;color:var(--text3)">IMEI: <b>${u.imei}</b></div>`:''}
+      <div style="font-size:12px;color:var(--text3)">Cost: ${fmt(u.cost_price)}</div>
+    </div>`).join('')}
+    <button class="bcancel" style="width:100%;margin-top:10px" onclick="this.closest('.modal-ov').remove()">Close</button>
+  </div>`;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
+async function delPurchase(id){
+  if(!confirm('Delete this purchase? All associated inventory units will also be deleted.'))return;
+  await api('DELETE','inventory',null,`purchase_id=eq.${id}`);
+  await api('DELETE','stock_purchases',null,`id=eq.${id}`);
+  await loadAll();renderMain();
+}
+
+// GENERIC MODAL
+function openModal(type,id){
+  ST.editId=id;ST.form={};
+  const maps={device:'devices',cust:'customers',supp:'suppliers',expense:'expenses',repair:'repairs'};
+  if(id!==null&&maps[type])ST.form={...D[maps[type]].find(x=>x.id==id)};
+  const old=document.getElementById('modalWrap');if(old)old.remove();
+  const div=document.createElement('div');div.id='modalWrap';
+  div.innerHTML=buildModal(type,id);
+  document.body.appendChild(div);
+}
+function closeModal(){const el=document.getElementById('modalWrap');if(el)el.remove();}
+
+function buildModal(type,id){
+  const isEdit=id!==null;const f=ST.form;const td=today();
+  let body='',title='';
+  if(type==='device'){
+    title=isEdit?'Edit Device':'Add Device';
+    body=`<div class="tf">
+      <div class="mfield"><label>DEVICE NAME *</label><input id="f_name" value="${f.name||''}" placeholder="e.g. iPhone 15 Pro"></div>
+      <div class="mfield"><label>BRAND</label><input id="f_brand" value="${f.brand||'Apple'}"></div>
+      <div class="mfield"><label>CATEGORY</label><select id="f_category">${['iPhone','iPad','MacBook','Android','Accessory'].map(c=>`<option${(f.category||'iPhone')===c?' selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="mfield"><label>BASE COST (RS.)</label><input type="number" id="f_base_cost" value="${f.base_cost||''}"></div>
+    </div><div class="mfield"><label>NOTES</label><input id="f_notes" value="${f.notes||''}"></div>`;
+  } else if(type==='cust'){
+    title=isEdit?'Edit Customer':'Add Customer';
+    body=`<div class="mfield"><label>FULL NAME *</label><input id="f_name" value="${f.name||''}"></div>
+    <div class="tf">
+      <div class="mfield"><label>PHONE</label><input id="f_phone" value="${f.phone||''}"></div>
+      <div class="mfield"><label>EMAIL</label><input id="f_email" value="${f.email||''}"></div>
+      <div class="mfield"><label>CITY</label><input id="f_city" value="${f.city||''}"></div>
+      <div class="mfield"><label>TYPE</label><select id="f_type"><option${(f.type||'Retail')==='Retail'?' selected':''}>Retail</option><option${f.type==='Wholesale'?' selected':''}>Wholesale</option></select></div>
+    </div>`;
+  } else if(type==='supp'){
+    title=isEdit?'Edit Supplier':'Add Supplier';
+    body=`<div class="mfield"><label>SUPPLIER NAME *</label><input id="f_name" value="${f.name||''}"></div>
+    <div class="tf">
+      <div class="mfield"><label>PHONE</label><input id="f_phone" value="${f.phone||''}"></div>
+      <div class="mfield"><label>EMAIL</label><input id="f_email" value="${f.email||''}"></div>
+      <div class="mfield"><label>CITY</label><input id="f_city" value="${f.city||''}"></div>
+    </div>`;
+  } else if(type==='expense'){
+    title=isEdit?'Edit Expense':'Add Expense';
+    body=`<div class="tf">
+      <div class="mfield"><label>DATE</label><input type="date" id="f_date" value="${f.date||td}"></div>
+      <div class="mfield"><label>CATEGORY</label><select id="f_category">${['Rent','Electricity','Salary','Internet','Transport','Other'].map(c=>`<option${(f.category||'Rent')===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="mfield"><label>DESCRIPTION *</label><input id="f_description" value="${f.description||''}"></div>
+    <div class="mfield"><label>AMOUNT (RS.) *</label><input type="number" id="f_amount" value="${f.amount||''}"></div>`;
+  } else if(type==='repair'){
+    title=isEdit?'Edit Repair Job':'New Repair Job';
+    body=`<div class="tf">
+      <div class="mfield"><label>DATE</label><input type="date" id="f_date" value="${f.date||td}"></div>
+      <div class="mfield"><label>CUSTOMER *</label><input id="f_customer" value="${f.customer||''}"></div>
+      <div class="mfield"><label>PHONE</label><input id="f_phone" value="${f.phone||''}"></div>
+      <div class="mfield"><label>DEVICE *</label><input id="f_device" value="${f.device||''}"></div>
+    </div>
+    <div class="mfield"><label>ISSUE / PROBLEM</label><input id="f_issue" value="${f.issue||''}"></div>
+    <div class="mfield"><label>STATUS</label><select id="f_status">${['Pending','In Progress','Ready','Delivered'].map(s=>`<option${(f.status||'Pending')===s?' selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="mfield"><label>REPAIR CHARGE (RS.)</label><input type="number" id="f_charge" value="${f.charge||''}"></div>
+    <div class="mfield"><label>NOTES</label><input id="f_notes" value="${f.notes||''}"></div>`;
+  }
+  return`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>${title}</h3>${body}<div class="mbtns"><button class="bsave" onclick="saveForm('${type}')">${isEdit?'Save Changes':'Add'}</button><button class="bcancel" onclick="closeModal()">Cancel</button></div></div></div>`;
+}
+
+async function saveForm(type){
+  const g=id=>document.getElementById(id)?.value||'';
+  const gn=id=>Number(document.getElementById(id)?.value||0);
+  const uid=CU.id;let data={},table='',isEdit=ST.editId!==null;
+  if(type==='device'){if(!g('f_name'))return alert('Device name required');data={user_id:uid,name:g('f_name'),brand:g('f_brand'),category:g('f_category'),base_cost:gn('f_base_cost'),notes:g('f_notes')};table='devices';}
+  else if(type==='cust'){if(!g('f_name'))return alert('Name required');data={user_id:uid,name:g('f_name'),phone:g('f_phone'),email:g('f_email'),city:g('f_city'),type:g('f_type')};table='customers';}
+  else if(type==='supp'){if(!g('f_name'))return alert('Name required');data={user_id:uid,name:g('f_name'),phone:g('f_phone'),email:g('f_email'),city:g('f_city')};table='suppliers';}
+  else if(type==='expense'){if(!g('f_description'))return alert('Description required');data={user_id:uid,date:g('f_date'),category:g('f_category'),description:g('f_description'),amount:gn('f_amount')};table='expenses';}
+  else if(type==='repair'){if(!g('f_customer')||!g('f_device'))return alert('Customer and device required');const jobId=isEdit?ST.form.job_id:`REP-${String(D.repairs.length+1).padStart(3,'0')}`;data={user_id:uid,job_id:jobId,date:g('f_date'),customer:g('f_customer'),phone:g('f_phone'),device:g('f_device'),issue:g('f_issue'),status:g('f_status'),charge:gn('f_charge'),notes:g('f_notes')};table='repairs';}
+  const res=isEdit?await api('PATCH',table,data,`id=eq.${ST.editId}`):await api('POST',table,data);
+  if(!res)return alert('Save failed. Please check your connection and try again.');
+  closeModal();await loadAll();renderMain();
+}
+
+async function delRow(table,id){
+  if(!confirm('Delete this item?'))return;
+  await api('DELETE',table,null,`id=eq.${id}`);
+  await loadAll();renderMain();
+}
+
+async function saveSettings(){
+  const g=id=>document.getElementById(id)?.value||'';const uid=CU.id;
+  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title'),terms:D.settings?.terms||''};
+  const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
+  const res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
+  if(!res)return alert('Save failed');
+  await loadAll();alert('Settings saved ✓');
+}
+
+function exportExcel(){
+  const rows=[['iVault Report — '+new Date().toLocaleDateString()],[],['SALES INVOICES'],['Invoice','Customer','Date','Total','Profit']];
+  D.bills.forEach(b=>rows.push([b.id,b.customer_name,b.date,b.total,b.profit]));
+  rows.push([],['INVENTORY'],['Device','Serial','IMEI','Color','Storage','Cost','Status']);
+  D.inventory.forEach(i=>rows.push([i.device_name,i.serial||'',i.imei||'',i.color||'',i.storage||'',i.cost_price,i.status]));
+  rows.push([],['EXPENSES'],['Date','Category','Description','Amount']);
+  D.expenses.forEach(e=>rows.push([e.date,e.category,e.description,e.amount]));
+  const rev=D.bills.reduce((a,b)=>a+Number(b.total),0);
+  const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
+  const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
+  rows.push([],['SUMMARY'],['Total Revenue',rev],['Gross Profit',prof],['Total Expenses',exp],['Net Profit',prof-exp]);
+  dl('\ufeff'+rows.map(r=>r.map(c=>JSON.stringify(c??'')).join(',')).join('\n'),'text/csv',`iVault_Report_${today()}.csv`);
+  alert('Exported! Open the .csv file with Excel or Google Sheets.');
+}
+function exportPDF(){
+  const s=D.settings||{};
+  const rev=D.bills.reduce((a,b)=>a+Number(b.total),0);
+  const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
+  const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
+  const net=prof-exp;
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>iVault Report</title><style>body{font-family:sans-serif;padding:28px;max-width:750px;margin:auto;color:#111}h1{color:#f97316}h2{font-size:14px;margin:18px 0 7px;border-bottom:2px solid #eee;padding-bottom:4px}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}th{background:#f5f5f5;text-align:left;padding:6px 7px;font-size:10px}td{padding:6px 7px;border-bottom:1px solid #f0f0f0}.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}.scard{background:#f9f9f9;border-radius:8px;padding:12px}.l{font-size:10px;color:#888}.v{font-size:18px;font-weight:800;margin-top:4px}.green{color:#16a34a}.red{color:#dc2626}</style></head><body>
+  <h1>🔐 iVault — Business Report</h1><div style="font-size:11px;color:#888">${s.company_name||''} · ${new Date().toLocaleDateString()}</div>
+  <h2>Summary</h2><div class="summary"><div class="scard"><div class="l">Revenue</div><div class="v green">Rs. ${rev.toLocaleString()}</div></div><div class="scard"><div class="l">Gross Profit</div><div class="v green">Rs. ${prof.toLocaleString()}</div></div><div class="scard"><div class="l">Expenses</div><div class="v red">Rs. ${exp.toLocaleString()}</div></div><div class="scard"><div class="l">Net Profit</div><div class="v ${net>=0?'green':'red'}">Rs. ${net.toLocaleString()}</div></div></div>
+  <h2>Sales</h2><table><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td>${b.id}</td><td>${b.customer_name}</td><td>${b.date}</td><td>Rs. ${Number(b.total).toLocaleString()}</td><td>Rs. ${Number(b.profit).toLocaleString()}</td></tr>`).join('')}</tbody></table>
+  <h2>Inventory</h2><table><thead><tr><th>Device</th><th>Serial</th><th>IMEI</th><th>Cost</th><th>Status</th></tr></thead><tbody>${D.inventory.map(i=>`<tr><td>${i.device_name}</td><td>${i.serial||'—'}</td><td>${i.imei||'—'}</td><td>Rs. ${Number(i.cost_price).toLocaleString()}</td><td>${i.status}</td></tr>`).join('')}</tbody></table>
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
+  w.document.close();
+}
+function exportJSON(){dl(JSON.stringify({exported:new Date().toISOString(),...D},null,2),'application/json',`iVault_Backup_${today()}.json`);}
+function manualBackup(){exportJSON();localStorage.setItem('ivault_last_backup',new Date().toLocaleString());renderMain();}
+function saveBackupEmail(){const email=document.getElementById('backupEmailInput')?.value?.trim();if(!email)return;localStorage.setItem('ivault_backup_email',email);const el=document.getElementById('backupEmailMsg');if(el)el.textContent='✓ Saved! Monthly backup reminders enabled.';}
+
+// Apply theme on load
+(()=>{const t=localStorage.getItem('ivault_theme')||'dark';if(t==='light')document.body.classList.add('light');THEME=t;})();
+</script>
+</body>
+</html>
