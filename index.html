@@ -289,10 +289,30 @@ function applyTheme(t){THEME=t;document.body.classList.toggle('light',t==='light
 // API
 async function api(method,table,body=null,match=null){
   let url=`${SUPA}/rest/v1/${table}`;
-  const h={'Content-Type':'application/json','apikey':KEY,'Authorization':`Bearer ${CS?.access_token||KEY}`,'Prefer':'return=representation'};
+  const token=CS?.access_token||KEY;
+  const h={'Content-Type':'application/json','apikey':KEY,'Authorization':`Bearer ${token}`,'Prefer':'return=representation'};
   const q=[];if(method==='GET')q.push('select=*');if(match)q.push(match);if(q.length)url+='?'+q.join('&');
   const r=await fetch(url,{method,headers:h,body:body?JSON.stringify(body):null});
-  if(!r.ok){console.error(table,method,await r.text());return null;}
+  if(!r.ok){
+    const errText=await r.text();
+    console.error('API error',method,table,r.status,errText);
+    // If 401/403 session expired — try to refresh
+    if(r.status===401||r.status===403){
+      try{
+        const ref=await fetch(`${SUPA}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{'Content-Type':'application/json','apikey':KEY},body:JSON.stringify({refresh_token:CS?.refresh_token})});
+        const newSession=await ref.json();
+        if(newSession?.access_token){
+          CS=newSession;
+          // Retry once with new token
+          const h2={...h,'Authorization':`Bearer ${newSession.access_token}`};
+          const r2=await fetch(url,{method,headers:h2,body:body?JSON.stringify(body):null});
+          if(!r2.ok){console.error('Retry failed',await r2.text());return null;}
+          const t2=await r2.text();return t2?JSON.parse(t2):[];
+        }
+      }catch(e){console.error('Token refresh failed',e);}
+    }
+    return null;
+  }
   const t=await r.text();return t?JSON.parse(t):[];
 }
 async function authCall(action,email,pass,meta={}){
@@ -403,16 +423,22 @@ function rDash(){
   const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const net=prof-exp;
-  // ledger totals
+  // ledger totals — same formula as rLedger to stay consistent
   const totalCustOwed=D.customers.reduce((a,c)=>{
     const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((x,b)=>x+Number(b.total),0);
-    const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((x,p)=>x+Number(p.amount),0);
-    return a+Math.max(0,billed-paid);
+    const payments=D.customerPayments.filter(p=>p.customer_id==c.id);
+    const paid=payments.filter(p=>p.payment_method!=='Opening Balance').reduce((x,p)=>x+Number(p.amount),0);
+    const openingDebit=payments.filter(p=>p.payment_method==='Opening Balance').reduce((x,p)=>x+Math.abs(Number(p.amount)),0);
+    const balance=(billed+openingDebit)-paid;
+    return a+Math.max(0,balance);
   },0);
   const totalSuppOwed=D.suppliers.reduce((a,s)=>{
     const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((x,p)=>x+Number(p.total_cost),0);
-    const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((x,p)=>x+Number(p.amount),0);
-    return a+Math.max(0,owed-paid);
+    const payments=D.supplierPayments.filter(p=>p.supplier_id==s.id);
+    const paid=payments.filter(p=>p.payment_method!=='Opening Balance').reduce((x,p)=>x+Number(p.amount),0);
+    const openingDebit=payments.filter(p=>p.payment_method==='Opening Balance').reduce((x,p)=>x+Math.abs(Number(p.amount)),0);
+    const balance=(owed+openingDebit)-paid;
+    return a+Math.max(0,balance);
   },0);
   const low=D.devices.filter(d=>D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length<=2);
   const activeRep=D.repairs.filter(r=>r.status!=='Delivered');
@@ -496,7 +522,12 @@ function rStock(){
   ${D.stockPurchases.length===0?'<div class="empty">No purchases yet</div>':D.stockPurchases.map(s=>{
     const units=D.inventory.filter(i=>i.purchase_id==s.id);
     return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="showPurchaseDetail(${s.id})">👁 View units</button><button class="iab" onclick="openEditStockModal(${s.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDelPurchase(${s.id})">🗑</button></div></div>
-    <div style="text-align:right;min-width:100px"><div style="font-size:15px;font-weight:800;color:var(--red)">${fmt(s.total_cost)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${units.length} units</div></div></div>`;}).join('')}
+    <div style="text-align:right;min-width:120px">
+      <div style="font-size:15px;font-weight:800;color:var(--red)">${fmt(s.total_cost)}</div>
+      <div style="margin-top:4px"><span class="badge ${(s.pay_status||'Unpaid')==='Cleared'?'badge-green':(s.pay_status)==='Partial'?'badge-amber':'badge-red'}">${s.pay_status||'Unpaid'}</span></div>
+      ${Number(s.balance||0)>0?`<div style="font-size:11px;color:var(--red);margin-top:3px">Due: ${fmt(s.balance)}</div>`:''}
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${units.length} units</div>
+    </div></div>`;}).join('')}
   </div>`;
 }
 
@@ -783,17 +814,27 @@ function openOpeningBalanceModal(type,id,name){
 
 async function saveOpeningBalance(){
   const type=window._obType;const id=window._obId;const name=window._obName;
+  if(!type||!id||!name){alert('Session data missing. Please close and try again.');return;}
   const date=document.getElementById('ob_date')?.value||today();
   const amount=Number(document.getElementById('ob_amount')?.value||0);
   const note=document.getElementById('ob_note')?.value||'Opening balance brought forward';
   if(!amount||amount<=0)return alert('Please enter a valid amount greater than 0');
+  if(!CU?.id){alert('Session expired. Please log in again.');return;}
   const isC=type===1;
   const table=isC?'customer_payments':'supplier_payments';
-  // Opening balance stored as negative amount with method 'Opening Balance'
-  // In timeline: negative payment = debit (they owe us / we owe them)
-  const data={user_id:CU.id,date,amount:-Math.abs(amount),payment_method:'Opening Balance',note,...(isC?{customer_id:id,customer_name:name}:{supplier_id:id,supplier_name:name})};
+  const data={
+    user_id:CU.id,
+    date,
+    amount:-Math.abs(amount),
+    payment_method:'Opening Balance',
+    note,
+    ...(isC?{customer_id:Number(id),customer_name:name}:{supplier_id:Number(id),supplier_name:name})
+  };
   const res=await api('POST',table,data);
-  if(!res)return alert('Save failed. Please try again.');
+  if(res===null){
+    alert('Failed to save opening balance. Check your connection and try again.');
+    return;
+  }
   closeModal();await loadAll();renderMain();
 }
 
@@ -1095,10 +1136,48 @@ function openStockModal(){
     <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Units Received</div>
     <div id="stockUnitsWrap"></div>
     <button onclick="addStockUnit()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:12px;font-weight:700">+ Add Unit</button>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment to Supplier</div>
+      <div class="mfield"><label>PAYMENT STATUS</label>
+        <select id="sp_pay_status" onchange="toggleSpPayFields()">
+          <option value="Unpaid">Unpaid — Will pay later</option>
+          <option value="Partial">Partial — Paid some now</option>
+          <option value="Cleared">Cleared — Fully paid</option>
+        </select>
+      </div>
+      <div id="sp_partial_fields" style="display:none">
+        <div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="sp_amount_paid" placeholder="How much paid now..." oninput="updateSpBalance()"></div>
+        <div id="sp_balance_row" style="display:none;background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px">
+          <div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE (will be added to supplier ledger)</div>
+          <div id="sp_balance_amt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">Rs. 0</div>
+        </div>
+      </div>
+      <div class="mfield" style="margin-top:8px"><label>PAYMENT METHOD</label>
+        <select id="sp_pay_method">
+          <option>Cash</option><option>Bank Transfer</option><option>HBL</option><option>Meezan Bank</option><option>JazzCash</option><option>Easypaisa</option><option>Cheque</option>
+        </select>
+      </div>
+    </div>
     <div class="mbtns"><button class="bsave" onclick="saveStockPurchase()">💾 Save Purchase</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
   </div></div>`;
   document.body.appendChild(div);
   addStockUnit();
+}
+
+function toggleSpPayFields(){
+  const status=document.getElementById('sp_pay_status')?.value;
+  const f=document.getElementById('sp_partial_fields');
+  if(f)f.style.display=status==='Partial'?'block':'none';
+}
+
+function updateSpBalance(){
+  const totalCost=stockUnits.reduce((a,u)=>a+Number(u.cost||0),0);
+  const paid=Number(document.getElementById('sp_amount_paid')?.value||0);
+  const bal=Math.max(0,totalCost-paid);
+  const row=document.getElementById('sp_balance_row');
+  const amt=document.getElementById('sp_balance_amt');
+  if(row)row.style.display=paid>0?'block':'none';
+  if(amt)amt.textContent=`Rs. ${bal.toLocaleString()}`;
 }
 
 function addStockUnit(){
@@ -1131,18 +1210,42 @@ async function saveStockPurchase(){
   const pid=document.getElementById('sp_pid')?.value;
   const supplierName=document.getElementById('sp_supplier_name')?.value?.trim();
   const supplierId=document.getElementById('sp_supplier_id')?.value;
-  const notes=document.getElementById('sp_notes')?.value;
+  const notes=document.getElementById('sp_notes')?.value||'';
+  const payStatus=document.getElementById('sp_pay_status')?.value||'Unpaid';
+  const payMethod=document.getElementById('sp_pay_method')?.value||'Cash';
   if(!supplierName)return alert('Please enter a supplier name');
   if(stockUnits.length===0)return alert('Add at least 1 unit');
   const validUnits=stockUnits.filter(u=>u.device_id);
   if(validUnits.length===0)return alert('Please select a device for each unit');
   const totalCost=validUnits.reduce((a,u)=>a+Number(u.cost||0),0);
-  const purchase=await api('POST','stock_purchases',{user_id:CU.id,purchase_id:pid,date,supplier_name:supplierName,supplier_id:supplierId||null,total_cost:totalCost,notes:notes||''});
+  const amountPaid=payStatus==='Cleared'?totalCost:payStatus==='Partial'?Number(document.getElementById('sp_amount_paid')?.value||0):0;
+  const balance=totalCost-amountPaid;
+  // Save purchase with payment info
+  const purchase=await api('POST','stock_purchases',{
+    user_id:CU.id,purchase_id:pid,date,
+    supplier_name:supplierName,
+    supplier_id:supplierId?Number(supplierId):null,
+    total_cost:totalCost,notes,
+    pay_status:payStatus,amount_paid:amountPaid,balance
+  });
   if(!purchase||!purchase[0])return alert('Failed to save purchase. Please try again.');
   const purchaseId=purchase[0].id;
+  // Save inventory units
   for(const u of validUnits){
     const dev=D.devices.find(d=>d.id==u.device_id);
     await api('POST','inventory',{user_id:CU.id,purchase_id:purchaseId,device_id:u.device_id,device_name:dev?.name||'',brand:dev?.brand||'',category:dev?.category||'',color:u.color||'',storage:u.storage||'',condition:u.condition||'New',serial:u.serial||'',imei:u.imei||'',cost_price:Number(u.cost)||0,status:'Available',date});
+  }
+  // Auto-add to supplier ledger if any payment made
+  if(amountPaid>0&&supplierId){
+    await api('POST','supplier_payments',{
+      user_id:CU.id,
+      supplier_id:Number(supplierId),
+      supplier_name:supplierName,
+      amount:amountPaid,
+      payment_method:payMethod,
+      note:`Payment on ${pid} (${payStatus})`,
+      date
+    });
   }
   closeModal();await loadAll();renderMain();
 }
@@ -1846,14 +1949,32 @@ function buildModal(type,id){
 async function saveForm(type){
   const g=id=>document.getElementById(id)?.value||'';
   const gn=id=>Number(document.getElementById(id)?.value||0);
-  const uid=CU.id;let data={},table='',isEdit=ST.editId!==null;
-  if(type==='device'){if(!g('f_name'))return alert('Device name required');data={user_id:uid,name:g('f_name'),brand:g('f_brand'),category:g('f_category'),base_cost:gn('f_base_cost'),notes:g('f_notes')};table='devices';}
-  else if(type==='cust'){if(!g('f_name'))return alert('Name required');data={user_id:uid,name:g('f_name'),phone:g('f_phone'),email:g('f_email'),city:g('f_city'),type:g('f_type')};table='customers';}
-  else if(type==='supp'){if(!g('f_name'))return alert('Name required');data={user_id:uid,name:g('f_name'),phone:g('f_phone'),email:g('f_email'),city:g('f_city')};table='suppliers';}
-  else if(type==='expense'){if(!g('f_description'))return alert('Description required');data={user_id:uid,date:g('f_date'),category:g('f_category'),description:g('f_description'),amount:gn('f_amount')};table='expenses';}
-  else if(type==='repair'){if(!g('f_customer')||!g('f_device'))return alert('Customer and device required');const jobId=isEdit?ST.form.job_id:`REP-${String(D.repairs.length+1).padStart(3,'0')}`;data={user_id:uid,job_id:jobId,date:g('f_date'),customer:g('f_customer'),phone:g('f_phone'),device:g('f_device'),issue:g('f_issue'),status:g('f_status'),charge:gn('f_charge'),notes:g('f_notes')};table='repairs';}
+  const uid=CU.id;
+  if(!uid){alert('Session expired. Please refresh and log in again.');return;}
+  let data={},table='',isEdit=ST.editId!==null;
+  if(type==='device'){
+    if(!g('f_name'))return alert('Device name required');
+    data={user_id:uid,name:g('f_name'),brand:g('f_brand'),category:g('f_category'),base_cost:gn('f_base_cost'),notes:g('f_notes')};table='devices';
+  } else if(type==='cust'){
+    if(!g('f_name'))return alert('Name required');
+    data={user_id:uid,name:g('f_name'),phone:g('f_phone'),email:g('f_email'),city:g('f_city'),type:g('f_type')||'Retail'};table='customers';
+  } else if(type==='supp'){
+    if(!g('f_name'))return alert('Name required');
+    data={user_id:uid,name:g('f_name'),phone:g('f_phone'),email:g('f_email'),city:g('f_city')};table='suppliers';
+  } else if(type==='expense'){
+    if(!g('f_description'))return alert('Description required');
+    data={user_id:uid,date:g('f_date'),category:g('f_category'),description:g('f_description'),amount:gn('f_amount')};table='expenses';
+  } else if(type==='repair'){
+    if(!g('f_customer')||!g('f_device'))return alert('Customer and device required');
+    const jobId=isEdit?ST.form.job_id:`REP-${String(D.repairs.length+1).padStart(3,'0')}`;
+    data={user_id:uid,job_id:jobId,date:g('f_date'),customer:g('f_customer'),phone:g('f_phone'),device:g('f_device'),issue:g('f_issue'),status:g('f_status'),charge:gn('f_charge'),notes:g('f_notes')};table='repairs';
+  }
+  if(!table){alert('Unknown form type: '+type);return;}
   const res=isEdit?await api('PATCH',table,data,`id=eq.${ST.editId}`):await api('POST',table,data);
-  if(!res)return alert('Save failed. Please check your connection and try again.');
+  if(res===null){
+    alert(`Save failed. Check your internet connection and try again.\n\nIf this keeps happening, try logging out and back in.`);
+    return;
+  }
   closeModal();await loadAll();renderMain();
 }
 
