@@ -541,9 +541,10 @@ function rInventory(){
   return`
   <div class="page-header"><h1>Inventory</h1></div>
   <div class="page-content">
-  <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="metric-grid">
     <div class="metric-card"><div class="mc-label">Total Units</div><div class="mc-val white">${D.inventory.length}</div></div>
     <div class="metric-card"><div class="mc-label">Available</div><div class="mc-val green">${D.inventory.filter(i=>i.status==='Available').length}</div></div>
+    <div class="metric-card" style="border-color:rgba(34,197,94,0.3)"><div class="mc-label">Stock Value (Available)</div><div class="mc-val green">${fmtK(D.inventory.filter(i=>i.status==='Available').reduce((a,i)=>a+Number(i.cost_price||0),0))}</div></div>
     <div class="metric-card"><div class="mc-label">Sold</div><div class="mc-val orange">${D.inventory.filter(i=>i.status==='Sold').length}</div></div>
   </div>
   <input class="plain-search" id="invSearch" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;refilter('inventory')">
