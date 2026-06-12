@@ -266,8 +266,8 @@ const NAV=[
   {id:'billing',icon:'🧾',label:'Billing'},
   {id:'expenses',icon:'💸',label:'Expenses'},
   {id:'repairs',icon:'🔧',label:'Repairs'},
-  {id:'reports',icon:'📊',label:'Reports'},
   {id:'ledger',icon:'📒',label:'Ledger'},
+  {id:'reports',icon:'📊',label:'Reports'},
   {id:'backup',icon:'☁️',label:'Backup'},
   {id:'settings',icon:'⚙️',label:'Settings'},
 ];
@@ -423,23 +423,9 @@ function rDash(){
   const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const net=prof-exp;
-  // ledger totals — same formula as rLedger to stay consistent
-  const totalCustOwed=D.customers.reduce((a,c)=>{
-    const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((x,b)=>x+Number(b.total),0);
-    const payments=D.customerPayments.filter(p=>p.customer_id==c.id);
-    const paid=payments.filter(p=>p.payment_method!=='Opening Balance').reduce((x,p)=>x+Number(p.amount),0);
-    const openingDebit=payments.filter(p=>p.payment_method==='Opening Balance').reduce((x,p)=>x+Math.abs(Number(p.amount)),0);
-    const balance=(billed+openingDebit)-paid;
-    return a+Math.max(0,balance);
-  },0);
-  const totalSuppOwed=D.suppliers.reduce((a,s)=>{
-    const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((x,p)=>x+Number(p.total_cost),0);
-    const payments=D.supplierPayments.filter(p=>p.supplier_id==s.id);
-    const paid=payments.filter(p=>p.payment_method!=='Opening Balance').reduce((x,p)=>x+Number(p.amount),0);
-    const openingDebit=payments.filter(p=>p.payment_method==='Opening Balance').reduce((x,p)=>x+Math.abs(Number(p.amount)),0);
-    const balance=(owed+openingDebit)-paid;
-    return a+Math.max(0,balance);
-  },0);
+  // ledger totals — same helpers as rLedger for perfect consistency
+  const totalCustOwed=D.customers.reduce((a,c)=>a+Math.max(0,custBalanceOf(c).balance),0);
+  const totalSuppOwed=D.suppliers.reduce((a,s)=>a+Math.max(0,suppBalanceOf(s).balance),0);
   const low=D.devices.filter(d=>D.inventory.filter(i=>i.device_id==d.id&&i.status==='Available').length<=2);
   const activeRep=D.repairs.filter(r=>r.status!=='Delivered');
   return`
@@ -513,22 +499,130 @@ function rStock(){
   return`
   <div class="page-header"><h1>Stock Purchases</h1><button class="btn-orange" onclick="openStockModal()">+ New Purchase</button></div>
   <div class="page-content">
-  <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">Record stock from suppliers. Each unit gets its own serial/IMEI and goes to Inventory automatically.</p>
   <div class="metric-grid" style="grid-template-columns:repeat(3,1fr)">
     <div class="metric-card"><div class="mc-label">Purchases</div><div class="mc-val white">${D.stockPurchases.length}</div></div>
     <div class="metric-card"><div class="mc-label">Total Invested</div><div class="mc-val red">${fmtK(total)}</div></div>
     <div class="metric-card"><div class="mc-label">Units Received</div><div class="mc-val blue">${D.inventory.length}</div></div>
   </div>
-  ${D.stockPurchases.length===0?'<div class="empty">No purchases yet</div>':D.stockPurchases.map(s=>{
+  <input class="plain-search" id="stockSearch" placeholder="🔍 Search by purchase ID or supplier name..." value="${ST.search}" oninput="ST.search=this.value;refilter('stock')">
+  <div id="stockList">${renderStockList()}</div>
+  </div>`;
+}
+function renderStockList(){
+  const q=ST.search.toLowerCase();
+  const filtered=D.stockPurchases.filter(s=>(s.purchase_id||'').toLowerCase().includes(q)||(s.supplier_name||'').toLowerCase().includes(q));
+  if(filtered.length===0)return'<div class="empty">No purchases found</div>';
+  return filtered.map(s=>{
     const units=D.inventory.filter(i=>i.purchase_id==s.id);
-    return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="showPurchaseDetail(${s.id})">👁 View units</button><button class="iab" onclick="openEditStockModal(${s.id})">✏️ Edit</button><button class="iab" style="color:var(--red)" onclick="confirmDelPurchase(${s.id})">🗑</button></div></div>
+    return`<div class="item-row"><div class="mi"><div class="iname" style="color:var(--orange)">${s.purchase_id||'PUR'}</div><div class="isub">Supplier: <b>${s.supplier_name}</b> · ${s.date}</div>${s.notes?`<div class="isub">${s.notes}</div>`:''}<div class="iacts"><button class="iab" onclick="previewPurchaseBill(${s.id})">👁 View Bill</button><button class="iab" onclick="openEditStockModal(${s.id})">✏️ Edit</button><button class="iab" onclick="waPurchase(${s.id})">💬</button><button class="iab" style="color:var(--red)" onclick="confirmDelPurchase(${s.id})">🗑</button></div></div>
     <div style="text-align:right;min-width:120px">
       <div style="font-size:15px;font-weight:800;color:var(--red)">${fmt(s.total_cost)}</div>
       <div style="margin-top:4px"><span class="badge ${(s.pay_status||'Unpaid')==='Cleared'?'badge-green':(s.pay_status)==='Partial'?'badge-amber':'badge-red'}">${s.pay_status||'Unpaid'}</span></div>
       ${Number(s.balance||0)>0?`<div style="font-size:11px;color:var(--red);margin-top:3px">Due: ${fmt(s.balance)}</div>`:''}
       <div style="font-size:11px;color:var(--text3);margin-top:2px">${units.length} units</div>
-    </div></div>`;}).join('')}
+    </div></div>`;}).join('');
+}
+
+// PURCHASE BILL — preview/print (works for old and new purchases, display only)
+function previewPurchaseBill(id){
+  const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
+  const st=D.settings||{};
+  const units=D.inventory.filter(i=>i.purchase_id==id);
+  const amtPaid=Number(s.amount_paid||0);
+  const bal=Number(s.balance??(Number(s.total_cost)-amtPaid));
+  const div=document.createElement('div');div.className='modal-ov';
+  div.innerHTML=`<div class="modal" style="max-width:560px">
+    <h3>📦 Purchase Bill — ${s.purchase_id||s.id}</h3>
+    <div style="background:#fff;border:1px solid #ccc;border-radius:4px;padding:20px 22px;color:#111;font-family:Arial,sans-serif;font-size:12px;max-height:460px;overflow-y:auto;line-height:1.5">
+      <div style="text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px">
+        <div style="font-size:20px;font-weight:900">${st.company_name||'iVault'}</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;font-weight:700">PURCHASE BILL</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;font-size:11px">
+        <div><div style="font-weight:700;text-transform:uppercase;font-size:9px;color:#555">Purchase ID</div><div style="font-weight:800;font-size:13px">${s.purchase_id||s.id}</div></div>
+        <div><div style="font-weight:700;text-transform:uppercase;font-size:9px;color:#555">Date</div><div style="font-weight:700;font-size:13px">${s.date}</div></div>
+        <div><div style="font-weight:700;text-transform:uppercase;font-size:9px;color:#555">Supplier</div><div style="font-weight:800;font-size:13px">${s.supplier_name}</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-top:1.5px solid #111;border-bottom:1.5px solid #111">
+          <th style="text-align:left;padding:6px 4px;font-size:10px;text-transform:uppercase">Device</th>
+          <th style="text-align:left;padding:6px 4px;font-size:10px;text-transform:uppercase">Serial No.</th>
+          <th style="text-align:left;padding:6px 4px;font-size:10px;text-transform:uppercase">IMEI</th>
+          <th style="text-align:right;padding:6px 4px;font-size:10px;text-transform:uppercase">Cost</th>
+        </tr></thead>
+        <tbody>${units.map(u=>`<tr style="border-bottom:1px solid #eee"><td style="padding:7px 4px;font-weight:700">${u.device_name||'—'}${u.color?' · '+u.color:''}${u.storage?' · '+u.storage:''}</td><td style="padding:7px 4px;color:#444">${u.serial||'—'}</td><td style="padding:7px 4px;color:#444">${u.imei||'—'}</td><td style="padding:7px 4px;font-weight:800;text-align:right">Rs. ${Number(u.cost_price||0).toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table>
+      <div style="border-top:1.5px solid #111;padding-top:8px;margin-top:2px;text-align:right">
+        <div style="font-size:15px;font-weight:900">Total: Rs. ${Number(s.total_cost).toLocaleString()}</div>
+        ${amtPaid>0?`<div style="font-size:13px;margin-top:3px">Paid: <b>Rs. ${amtPaid.toLocaleString()}</b></div>`:''}
+        ${bal>0?`<div style="font-size:14px;font-weight:800;margin-top:2px">Balance Due: Rs. ${bal.toLocaleString()}</div>`:''}
+        <div style="margin-top:4px;font-size:11px;font-weight:700">Status: ${s.pay_status||'Unpaid'}</div>
+      </div>
+      ${s.notes?`<div style="border:1px solid #ddd;border-radius:4px;padding:8px;font-size:11px;margin-top:10px"><b>Notes:</b> ${s.notes}</div>`:''}
+      <div style="text-align:center;margin-top:14px;font-size:10px;color:#666;border-top:1px solid #eee;padding-top:8px">${[st.address,st.phone,st.email].filter(Boolean).join(' · ')}</div>
+    </div>
+    <div class="mbtns" style="margin-top:14px">
+      <button class="bsave" onclick="printPurchaseBill(${s.id})">🖨 Print</button>
+      <button class="btn-wa" style="flex:1;padding:11px;border-radius:10px;font-size:13px" onclick="waPurchase(${s.id})">💬 WhatsApp</button>
+      <button class="bcancel" onclick="this.closest('.modal-ov').remove()">Close</button>
+    </div>
   </div>`;
+  div.onclick=e=>{if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
+function printPurchaseBill(id){
+  const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
+  const st=D.settings||{};
+  const units=D.inventory.filter(i=>i.purchase_id==id);
+  const amtPaid=Number(s.amount_paid||0);
+  const bal=Number(s.balance??(Number(s.total_cost)-amtPaid));
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>${s.purchase_id||s.id}</title><style>
+  @page{size:A5;margin:10mm}*{box-sizing:border-box}
+  body{font-family:Arial,sans-serif;color:#000;margin:0;font-size:11px;line-height:1.5;max-width:138mm}
+  .hdr{text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:14px}
+  .shop{font-size:20px;font-weight:900}.sub{font-size:10px;font-weight:700;color:#555;margin-top:2px}
+  .meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px}
+  .ml{font-size:8px;font-weight:700;text-transform:uppercase;color:#555;margin-bottom:2px}.mv{font-weight:800;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  thead tr{border-top:1.5px solid #000;border-bottom:1.5px solid #000}
+  th{text-align:left;padding:6px;font-size:10px;font-weight:700;text-transform:uppercase}th:last-child{text-align:right}
+  td{padding:7px 6px;border-bottom:1px solid #ddd}td:last-child{text-align:right;font-weight:800}
+  .totals{border-top:1.5px solid #000;padding-top:7px;text-align:right}
+  .notes{border:1px solid #ccc;border-radius:3px;padding:7px;font-size:10px;margin-top:10px}
+  .contact{text-align:center;font-size:9px;color:#444;border-top:1px solid #ccc;margin-top:12px;padding-top:8px}
+  </style></head><body>
+  <div class="hdr"><div class="shop">${st.company_name||'iVault'}</div><div class="sub">PURCHASE BILL</div></div>
+  <div class="meta">
+    <div><div class="ml">Purchase ID</div><div class="mv">${s.purchase_id||s.id}</div></div>
+    <div><div class="ml">Date</div><div class="mv">${s.date}</div></div>
+    <div><div class="ml">Supplier</div><div class="mv">${s.supplier_name}</div></div>
+  </div>
+  <table><thead><tr><th>Device</th><th>Serial</th><th>IMEI</th><th>Cost</th></tr></thead><tbody>
+  ${units.map(u=>`<tr><td><b>${u.device_name||'—'}</b>${u.color?' · '+u.color:''}${u.storage?' · '+u.storage:''}</td><td>${u.serial||'—'}</td><td>${u.imei||'—'}</td><td>Rs. ${Number(u.cost_price||0).toLocaleString()}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="totals">
+    <div style="font-size:14px;font-weight:900">Total: Rs. ${Number(s.total_cost).toLocaleString()}</div>
+    ${amtPaid>0?`<div style="font-size:12px;margin-top:2px">Paid: <b>Rs. ${amtPaid.toLocaleString()}</b></div>`:''}
+    ${bal>0?`<div style="font-size:13px;font-weight:800;margin-top:2px">Balance Due: Rs. ${bal.toLocaleString()}</div>`:''}
+    <div style="margin-top:3px;font-size:10px;font-weight:700">Status: ${s.pay_status||'Unpaid'}</div>
+  </div>
+  ${s.notes?`<div class="notes"><b>Notes:</b> ${s.notes}</div>`:''}
+  <div class="contact">${[st.address,st.phone,st.email].filter(Boolean).join(' · ')}</div>
+  <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
+  w.document.close();
+}
+
+function waPurchase(id){
+  const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
+  const st=D.settings||{};
+  const units=D.inventory.filter(i=>i.purchase_id==id);
+  const items=units.map(u=>`• ${u.device_name||'Item'}${u.serial?' (SN:'+u.serial+')':''} — Rs. ${Number(u.cost_price||0).toLocaleString()}`).join('\n');
+  const amtPaid=Number(s.amount_paid||0);
+  const bal=Number(s.balance??(Number(s.total_cost)-amtPaid));
+  const msg=`📦 *${st.company_name||'iVault'} — Purchase Bill*\n\n🆔 *${s.purchase_id||s.id}*\n📅 Date: ${s.date}\n🚚 Supplier: ${s.supplier_name}\n\n*Units:*\n${items}\n\n💰 *Total: Rs. ${Number(s.total_cost).toLocaleString()}*${amtPaid>0?`\n✅ Paid: Rs. ${amtPaid.toLocaleString()}`:''}${bal>0?`\n⏳ Balance: Rs. ${bal.toLocaleString()}`:''}\nStatus: ${s.pay_status||'Unpaid'}${s.notes?'\n\n📝 '+s.notes:''}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
 // INVENTORY
@@ -547,12 +641,22 @@ function rInventory(){
     <div class="metric-card" style="border-color:rgba(34,197,94,0.3)"><div class="mc-label">Stock Value (Available)</div><div class="mc-val green">${fmtK(D.inventory.filter(i=>i.status==='Available').reduce((a,i)=>a+Number(i.cost_price||0),0))}</div></div>
     <div class="metric-card"><div class="mc-label">Sold</div><div class="mc-val orange">${D.inventory.filter(i=>i.status==='Sold').length}</div></div>
   </div>
-  <input class="plain-search" id="invSearch" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;refilter('inventory')">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <input class="plain-search" id="invSearch" style="flex:1;min-width:200px;margin-bottom:0" placeholder="🔍 Search by device name, serial or IMEI..." value="${ST.search}" oninput="ST.search=this.value;refilter('inventory')">
+    <select id="invSort" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg2);color:var(--text);outline:none;font-weight:600;cursor:pointer" onchange="ST.invSort=this.value;refilter('inventory')">
+      <option value="default"${(ST.invSort||'default')==='default'?' selected':''}>Default order</option>
+      <option value="available"${ST.invSort==='available'?' selected':''}>Available on top</option>
+      <option value="sold"${ST.invSort==='sold'?' selected':''}>Sold on top</option>
+    </select>
+  </div>
   <div id="invList">${renderInventoryList(filtered)}</div>
   </div>`;
 }
 function renderInventoryList(filtered){
   if(!filtered)filtered=D.inventory.filter(i=>(i.serial||'').toLowerCase().includes(ST.search.toLowerCase())||(i.imei||'').toLowerCase().includes(ST.search.toLowerCase())||(i.device_name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  const sort=ST.invSort||'default';
+  if(sort==='available')filtered=[...filtered].sort((a,b)=>(a.status==='Available'?0:1)-(b.status==='Available'?0:1));
+  else if(sort==='sold')filtered=[...filtered].sort((a,b)=>(a.status==='Sold'?0:1)-(b.status==='Sold'?0:1));
   if(filtered.length===0)return'<div class="empty">No inventory found</div>';
   return filtered.map(i=>`
     <div class="item-row"><div class="mi"><div class="iname">${i.device_name||'Unknown'}</div>
@@ -607,6 +711,8 @@ function refilter(section){
   else if(section==='inventory'){const el=document.getElementById('invList');if(el)el.innerHTML=renderInventoryList();}
   else if(section==='people'){const el=document.getElementById('peopleList');if(el)el.innerHTML=renderPeopleList();}
   else if(section==='billing'){const el=document.getElementById('billList');if(el)el.innerHTML=renderBillList();}
+  else if(section==='stock'){const el=document.getElementById('stockList');if(el)el.innerHTML=renderStockList();}
+  else if(section==='ledger'){const el=document.getElementById('ledgerList');if(el)el.innerHTML=renderLedgerList();}
 }
 
 // BILLING
@@ -718,25 +824,26 @@ function rReports(){
 // Ledger name store — avoids HTML encoding issues with special chars in names
 const _ldNames={};
 
+// Ledger balance helpers — match by customer_id FIRST, then name (fixes edited-bill mismatch)
+function ledgerBillsFor(c){return D.bills.filter(b=>(b.customer_id&&String(b.customer_id)===String(c.id))||b.customer_name===c.name);}
+function ledgerPurchasesFor(s){return D.stockPurchases.filter(p=>(p.supplier_id&&String(p.supplier_id)===String(s.id))||p.supplier_name===s.name);}
+function custBalanceOf(c){
+  const totalBilled=ledgerBillsFor(c).reduce((a,b)=>a+Number(b.total),0);
+  const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id&&Number(p.amount)>0).reduce((a,p)=>a+Number(p.amount),0);
+  const openingDebit=D.customerPayments.filter(p=>p.customer_id==c.id&&p.payment_method==='Opening Balance').reduce((a,p)=>a+Math.abs(Number(p.amount)),0);
+  return{totalBilled,totalPaid,balance:(totalBilled+openingDebit)-totalPaid};
+}
+function suppBalanceOf(s){
+  const totalOwed=ledgerPurchasesFor(s).reduce((a,p)=>a+Number(p.total_cost),0);
+  const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id&&Number(p.amount)>0).reduce((a,p)=>a+Number(p.amount),0);
+  const openingDebit=D.supplierPayments.filter(p=>p.supplier_id==s.id&&p.payment_method==='Opening Balance').reduce((a,p)=>a+Math.abs(Number(p.amount)),0);
+  return{totalOwed,totalPaid,balance:(totalOwed+openingDebit)-totalPaid};
+}
+
 function rLedger(){
   const isC=ST.ledgerTab!=='suppliers';
-  const list=isC?D.customers:D.suppliers;
-  const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
-  function custBalance(c){
-    const totalBilled=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);
-    const totalPaid=D.customerPayments.filter(p=>p.customer_id==c.id&&Number(p.amount)>0).reduce((a,p)=>a+Number(p.amount),0);
-    const openingDebit=D.customerPayments.filter(p=>p.customer_id==c.id&&p.payment_method==='Opening Balance').reduce((a,p)=>a+Math.abs(Number(p.amount)),0);
-    return{totalBilled,totalPaid,balance:(totalBilled+openingDebit)-totalPaid};
-  }
-  function suppBalance(s){
-    const totalOwed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);
-    const totalPaid=D.supplierPayments.filter(p=>p.supplier_id==s.id&&Number(p.amount)>0).reduce((a,p)=>a+Number(p.amount),0);
-    const openingDebit=D.supplierPayments.filter(p=>p.supplier_id==s.id&&p.payment_method==='Opening Balance').reduce((a,p)=>a+Math.abs(Number(p.amount)),0);
-    return{totalOwed,totalPaid,balance:(totalOwed+openingDebit)-totalPaid};
-  }
-  const totalCustBalance=D.customers.reduce((a,c)=>{const b=custBalance(c);return a+b.balance;},0);
-  const totalSuppBalance=D.suppliers.reduce((a,s)=>{const b=suppBalance(s);return a+b.balance;},0);
-  // store names in lookup map
+  const totalCustBalance=D.customers.reduce((a,c)=>a+custBalanceOf(c).balance,0);
+  const totalSuppBalance=D.suppliers.reduce((a,s)=>a+suppBalanceOf(s).balance,0);
   [...D.customers,...D.suppliers].forEach(x=>{_ldNames[x.id]=x.name;});
   return`
   <div class="page-header"><h1>Ledger</h1>
@@ -754,10 +861,18 @@ function rLedger(){
     <button class="tab-btn${isC?' active':''}" onclick="ST.ledgerTab='customers';ST.search='';renderMain()">📥 Customer Balances</button>
     <button class="tab-btn${!isC?' active':''}" onclick="ST.ledgerTab='suppliers';ST.search='';renderMain()">📤 Supplier Balances</button>
   </div>
-  <input class="plain-search" placeholder="Search ${isC?'customers':'suppliers'}..." value="${ST.search}" oninput="ST.search=this.value;renderMain()">
-  ${filtered.length===0?`<div class="empty">No ${isC?'customers':'suppliers'} yet. Add them in People tab first.</div>`:
-    filtered.map(x=>{
-      const bal=isC?custBalance(x):suppBalance(x);
+  <input class="plain-search" id="ledgerSearch" placeholder="Search ${isC?'customers':'suppliers'}..." value="${ST.search}" oninput="ST.search=this.value;refilter('ledger')">
+  <div id="ledgerList">${renderLedgerList()}</div>
+  </div>`;
+}
+
+function renderLedgerList(){
+  const isC=ST.ledgerTab!=='suppliers';
+  const list=isC?D.customers:D.suppliers;
+  const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  if(filtered.length===0)return`<div class="empty">No ${isC?'customers':'suppliers'} found</div>`;
+  return filtered.map(x=>{
+      const bal=isC?custBalanceOf(x):suppBalanceOf(x);
       const totalAmt=isC?bal.totalBilled:bal.totalOwed;
       const balColor=bal.balance>0?'var(--red)':bal.balance<0?'var(--green)':'var(--text3)';
       const balLabel=isC?(bal.balance>0?'Outstanding':'Overpaid'):(bal.balance>0?'You Owe':'Overpaid');
@@ -785,8 +900,7 @@ function rLedger(){
           ${bal.balance>0?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Due: ${fmt(bal.balance)}</div>`:''}
         </div>
       </div>`;
-    }).join('')}
-  </div>`;
+    }).join('');
 }
 
 // Ledger name store populated in rLedger
@@ -879,8 +993,8 @@ async function savePayment(type,id,name){
 
 function buildLedgerTimeline(type,id,name){
   const isC=type===1;
-  const bills=isC?D.bills.filter(b=>b.customer_name===name):[];
-  const purchases=!isC?D.stockPurchases.filter(p=>p.supplier_name===name):[];
+  const bills=isC?D.bills.filter(b=>(b.customer_id&&String(b.customer_id)===String(id))||b.customer_name===name):[];
+  const purchases=!isC?D.stockPurchases.filter(p=>(p.supplier_id&&String(p.supplier_id)===String(id))||p.supplier_name===name):[];
   const payments=isC?D.customerPayments.filter(p=>p.customer_id==id):D.supplierPayments.filter(p=>p.supplier_id==id);
   const timeline=[];
   if(isC) bills.forEach(b=>timeline.push({date:b.date,type:'invoice',label:`Invoice ${b.id}`,debit:Number(b.total),credit:0}));
@@ -982,13 +1096,11 @@ function printCombinedLedger(type){
   const list=isC?D.customers:D.suppliers;
   const rows=list.map(x=>{
     if(isC){
-      const billed=D.bills.filter(b=>b.customer_name===x.name).reduce((a,b)=>a+Number(b.total),0);
-      const paid=D.customerPayments.filter(p=>p.customer_id==x.id).reduce((a,p)=>a+Number(p.amount),0);
-      return{name:x.name,phone:x.phone||'',city:x.city||'',billed,paid,balance:billed-paid};
+      const b=custBalanceOf(x);
+      return{name:x.name,phone:x.phone||'',city:x.city||'',billed:b.totalBilled,paid:b.totalPaid,balance:b.balance};
     } else {
-      const owed=D.stockPurchases.filter(p=>p.supplier_name===x.name).reduce((a,p)=>a+Number(p.total_cost),0);
-      const paid=D.supplierPayments.filter(p=>p.supplier_id==x.id).reduce((a,p)=>a+Number(p.amount),0);
-      return{name:x.name,phone:x.phone||'',city:x.city||'',billed:owed,paid,balance:owed-paid};
+      const b=suppBalanceOf(x);
+      return{name:x.name,phone:x.phone||'',city:x.city||'',billed:b.totalOwed,paid:b.totalPaid,balance:b.balance};
     }
   });
   const grandBilled=rows.reduce((a,r)=>a+r.billed,0);
@@ -1760,8 +1872,9 @@ async function saveEditBill(id){
 function openEditStockModal(id){
   const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
   const units=D.inventory.filter(i=>i.purchase_id==id);
-  // clone units for editing
+  // clone units for editing; track deleted ids
   window._editStockUnits=units.map(u=>({...u}));
+  window._editStockDeleted=[];
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
   div.innerHTML=`<div class="modal-ov" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:580px">
@@ -1772,23 +1885,42 @@ function openEditStockModal(id){
     </div>
     <div class="mfield"><label>SUPPLIER NAME</label><input id="esp_supplier" value="${s.supplier_name||''}"></div>
     <div class="mfield"><label>NOTES</label><textarea id="esp_notes">${s.notes||''}</textarea></div>
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Units (${units.length})</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Units</div>
     <div id="editStockUnitsWrap"></div>
+    <button onclick="addEditStockUnit()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:12px;font-weight:700">+ Add Unit</button>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment to Supplier</div>
+      <div class="mfield"><label>PAYMENT STATUS</label>
+        <select id="esp_pay_status" onchange="document.getElementById('esp_partial').style.display=this.value==='Partial'?'block':'none'">
+          <option value="Unpaid"${(s.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid</option>
+          <option value="Partial"${s.pay_status==='Partial'?' selected':''}>Partial</option>
+          <option value="Cleared"${s.pay_status==='Cleared'?' selected':''}>Cleared</option>
+        </select>
+      </div>
+      <div id="esp_partial" style="${s.pay_status==='Partial'?'':'display:none'}">
+        <div class="mfield"><label>AMOUNT PAID (RS.)</label><input type="number" id="esp_amount_paid" value="${s.amount_paid||0}"></div>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:6px;font-weight:500">💡 Changing payment status here updates the purchase record. The supplier ledger entry adjusts automatically based on the new paid amount.</p>
+    </div>
     <div class="mbtns"><button class="bsave" onclick="saveEditStock(${id})">✓ Save All Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
   </div></div>`;
   document.body.appendChild(div);
   renderEditStockUnits();
 }
 
+function addEditStockUnit(){
+  window._editStockUnits.push({id:null,device_id:'',device_name:'',color:'',storage:'',condition:'New',serial:'',imei:'',cost_price:'',status:'Available',_isNew:true});
+  renderEditStockUnits();
+}
+
 function renderEditStockUnits(){
   const wrap=document.getElementById('editStockUnitsWrap');if(!wrap)return;
   const units=window._editStockUnits||[];
-  const deviceOpts=D.devices.map(d=>`<option value="${d.id}">${d.name} (${d.category})</option>`).join('');
   wrap.innerHTML=units.map((u,i)=>`
     <div class="unit-row">
       <div class="unit-title">
-        <span>Unit ${i+1} — <span class="badge ${u.status==='Available'?'badge-green':'badge-purple'}">${u.status}</span></span>
-        ${u.status==='Available'?`<button onclick="removeEditStockUnit(${i})" style="font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button>`:'<span style="font-size:10px;color:var(--text3)">(sold — limited edit)</span>'}
+        <span>Unit ${i+1}${u._isNew?' <span class="badge badge-blue">New</span>':` — <span class="badge ${u.status==='Available'?'badge-green':'badge-purple'}">${u.status}</span>`}</span>
+        ${u.status==='Available'||u._isNew?`<button onclick="removeEditStockUnit(${i})" style="font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button>`:'<span style="font-size:10px;color:var(--text3)">(sold — limited edit)</span>'}
       </div>
       <div class="tf">
         <div class="mfield"><label>DEVICE</label>
@@ -1812,42 +1944,63 @@ function renderEditStockUnits(){
 }
 
 function removeEditStockUnit(idx){
-  if(!confirm('Remove this unit from the purchase? It will be deleted from inventory.'))return;
-  window._editStockUnits[idx]._delete=true;
-  renderEditStockUnits();
-  // Re-render excluding deleted
-  window._editStockUnits=window._editStockUnits.filter(u=>!u._delete);
-  renderEditStockUnits();
+  showConfirm('Remove this unit from the purchase? It will be deleted from inventory.',()=>{
+    const u=window._editStockUnits[idx];
+    if(u&&u.id)window._editStockDeleted.push(u.id);
+    window._editStockUnits.splice(idx,1);
+    renderEditStockUnits();
+  });
 }
 
 async function saveEditStock(id){
+  const s=D.stockPurchases.find(x=>x.id==id);if(!s)return;
   const supplier=document.getElementById('esp_supplier')?.value?.trim();
   if(!supplier)return alert('Supplier name required');
   const date=document.getElementById('esp_date')?.value;
   const pid=document.getElementById('esp_pid')?.value;
   const notes=document.getElementById('esp_notes')?.value?.trim()||'';
-  const units=window._editStockUnits||[];
-  // Recalculate total cost
+  const payStatus=document.getElementById('esp_pay_status')?.value||'Unpaid';
+  const units=(window._editStockUnits||[]).filter(u=>u.device_id);
   const totalCost=units.reduce((a,u)=>a+Number(u.cost_price||0),0);
-  // Save purchase header
-  const res=await api('PATCH','stock_purchases',{date,purchase_id:pid,supplier_name:supplier,notes,total_cost:totalCost},`id=eq.${id}`);
+  const amountPaid=payStatus==='Cleared'?totalCost:payStatus==='Partial'?Number(document.getElementById('esp_amount_paid')?.value||0):0;
+  const balance=totalCost-amountPaid;
+  // Save purchase header with payment info
+  const res=await api('PATCH','stock_purchases',{date,purchase_id:pid,supplier_name:supplier,notes,total_cost:totalCost,pay_status:payStatus,amount_paid:amountPaid,balance},`id=eq.${id}`);
   if(!res)return alert('Save failed. Try again.');
-  // Save each unit update
+  // Delete removed units
+  for(const delId of(window._editStockDeleted||[])){
+    await api('DELETE','inventory',null,`id=eq.${delId}`);
+  }
+  // Save units: update existing, insert new
   for(const u of units){
     const dev=D.devices.find(d=>String(d.id)===String(u.device_id));
-    await api('PATCH','inventory',{
+    const unitData={
       device_id:u.device_id||null,
       device_name:dev?.name||u.device_name||'',
       category:dev?.category||u.category||'',
       brand:dev?.brand||u.brand||'',
-      color:u.color||'',
-      storage:u.storage||'',
+      color:u.color||'',storage:u.storage||'',
       condition:u.condition||'New',
-      serial:u.serial||'',
-      imei:u.imei||'',
+      serial:u.serial||'',imei:u.imei||'',
       cost_price:Number(u.cost_price)||0,
       date
-    },`id=eq.${u.id}`);
+    };
+    if(u._isNew||!u.id){
+      await api('POST','inventory',{...unitData,user_id:CU.id,purchase_id:id,status:'Available'});
+    } else {
+      await api('PATCH','inventory',unitData,`id=eq.${u.id}`);
+    }
+  }
+  // Sync supplier ledger entry for this purchase: delete old auto-entries, add fresh one if paid
+  const oldPid=s.purchase_id||'';
+  const supplierId=s.supplier_id;
+  if(supplierId){
+    // remove previous auto payment entries for this purchase (matched by note)
+    const autoNotes=D.supplierPayments.filter(p=>p.supplier_id==supplierId&&(p.note||'').includes(oldPid)&&p.payment_method!=='Opening Balance');
+    for(const p of autoNotes){await api('DELETE','supplier_payments',null,`id=eq.${p.id}`);}
+    if(amountPaid>0){
+      await api('POST','supplier_payments',{user_id:CU.id,supplier_id:Number(supplierId),supplier_name:supplier,amount:amountPaid,payment_method:'Cash',note:`Payment on ${pid} (${payStatus})`,date});
+    }
   }
   closeModal();await loadAll();renderMain();
 }
