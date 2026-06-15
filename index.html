@@ -412,6 +412,29 @@ function devLabel(i){
   const extras=[i.color,i.storage,i.condition].filter(Boolean).join(' · ');
   return extras?`${name} · ${extras}`:name;
 }
+// Live profit for a bill: sale total minus the CURRENT cost of each item.
+// Uses the live inventory cost_price when the item links to an inventory unit
+// (so editing an old purchase's cost updates profit), else falls back to the
+// cost stored on the line item, else to the frozen bill.profit.
+function billLiveProfit(b){
+  const items=b.items||[];
+  if(!items.length)return Number(b.profit||0);
+  let total=0,cost=0,haveCost=true;
+  for(const it of items){
+    const sale=Number(it.sale_price||it.price||0);
+    total+=sale;
+    let c=null;
+    if(it.inv_id){
+      const inv=D.inventory.find(u=>String(u.id)===String(it.inv_id));
+      if(inv)c=Number(inv.cost_price||0);
+    }
+    if(c===null&&(it.cost_price!==undefined&&it.cost_price!==null&&it.cost_price!==''))c=Number(it.cost_price);
+    if(c===null){haveCost=false;break;}
+    cost+=c;
+  }
+  if(!haveCost)return Number(b.profit||0); // fallback for old bills with no cost data
+  return total-cost;
+}
 // Returns array of bank objects {name,title,acc,iban}. Reads new 'banks' JSON; falls back to legacy bank1/bank2 fields.
 function getBanks(s){
   s=s||D.settings||{};
@@ -490,7 +513,9 @@ function rDash(){
   const avail=D.inventory.filter(i=>i.status==='Available').length;
   const sold=D.inventory.filter(i=>i.status==='Sold').length;
   const rev=D.bills.reduce((a,b)=>a+Number(b.total),0);
-  const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
+  // Live profit: for each bill, recompute cost from CURRENT data so editing old
+  // purchases/sales updates the dashboard in real time (not the frozen b.profit).
+  const prof=D.bills.reduce((a,b)=>a+billLiveProfit(b),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const net=prof-exp;
   // ledger totals — same helpers as rLedger for perfect consistency
@@ -525,12 +550,10 @@ function rDash(){
   </div>
   <div class="two-col">
     <div class="card" style="cursor:pointer" onclick="setTab('ledger')"><div class="card-title">📥 Customer Balances</div>
-      ${D.customers.length===0?'<div class="empty">No customers yet</div>':D.customers.slice(0,4).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
-      ${D.customers.length>4?`<div id="custBalMore" style="display:none">${D.customers.slice(4).map(c=>{const billed=D.bills.filter(b=>b.customer_name===c.name).reduce((a,b)=>a+Number(b.total),0);const paid=D.customerPayments.filter(p=>p.customer_id==c.id).reduce((a,p)=>a+Number(p.amount),0);const bal=billed-paid;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':bal<billed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}</div><button onclick="toggleMore('custBalMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${D.customers.length-4} more</button>`:''}
+      ${D.customers.length===0?'<div class="empty">No customers yet</div>':[...D.customers].sort((a,b)=>custBalanceOf(b).balance-custBalanceOf(a).balance).slice(0,4).map(c=>{const bal=custBalanceOf(c).balance;return`<div class="ri"><div style="font-weight:700">${c.name}</div><span class="badge ${bal<=0?'badge-green':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
     </div>
     <div class="card" style="cursor:pointer" onclick="ST.ledgerTab='suppliers';setTab('ledger')"><div class="card-title">📤 Supplier Balances</div>
-      ${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':D.suppliers.slice(0,4).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
-      ${D.suppliers.length>4?`<div id="suppBalMore" style="display:none">${D.suppliers.slice(4).map(s=>{const owed=D.stockPurchases.filter(p=>p.supplier_name===s.name).reduce((a,p)=>a+Number(p.total_cost),0);const paid=D.supplierPayments.filter(p=>p.supplier_id==s.id).reduce((a,p)=>a+Number(p.amount),0);const bal=owed-paid;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':bal<owed*0.5?'badge-amber':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}</div><button onclick="toggleMore('suppBalMore',this)" style="font-size:12px;color:var(--orange);background:none;border:none;cursor:pointer;margin-top:6px;font-weight:600">▼ See ${D.suppliers.length-4} more</button>`:''}
+      ${D.suppliers.length===0?'<div class="empty">No suppliers yet</div>':[...D.suppliers].sort((a,b)=>suppBalanceOf(b).balance-suppBalanceOf(a).balance).slice(0,4).map(s=>{const bal=suppBalanceOf(s).balance;return`<div class="ri"><div style="font-weight:700">${s.name}</div><span class="badge ${bal<=0?'badge-green':'badge-red'}">${bal<=0?'✓ Cleared':fmt(bal)+' due'}</span></div>`;}).join('')}
     </div>
   </div>
   </div>`;
@@ -865,7 +888,7 @@ function rRepairs(){
 // REPORTS
 function rReports(){
   const rev=D.bills.reduce((a,b)=>a+Number(b.total),0);
-  const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
+  const prof=D.bills.reduce((a,b)=>a+billLiveProfit(b),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const repRev=D.repairs.reduce((a,r)=>a+Number(r.charge),0);
   const net=prof+repRev-exp;
@@ -884,7 +907,7 @@ function rReports(){
     <div style="font-size:32px;font-weight:800;color:var(--green)">${fmt(net)}</div>
   </div>
   <div class="two-col">
-    <div class="card"><div class="card-title">Sales Invoices</div>${D.bills.length===0?'<div class="empty">No invoices</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice</th><th>Customer</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td style="color:var(--orange);font-weight:700">${b.id}</td><td>${b.customer_name}</td><td style="color:var(--green);font-weight:700">${fmt(b.total)}</td><td style="color:var(--amber);font-weight:700">${fmt(b.profit)}</td></tr>`).join('')}</tbody></table></div>`}</div>
+    <div class="card"><div class="card-title">Sales Invoices</div>${D.bills.length===0?'<div class="empty">No invoices</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice</th><th>Customer</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td style="color:var(--orange);font-weight:700">${b.id}</td><td>${b.customer_name}</td><td style="color:var(--green);font-weight:700">${fmt(b.total)}</td><td style="color:var(--amber);font-weight:700">${fmt(billLiveProfit(b))}</td></tr>`).join('')}</tbody></table></div>`}</div>
     <div class="card"><div class="card-title">Expenses</div>${D.expenses.length===0?'<div class="empty">No expenses</div>':`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>${D.expenses.map(e=>`<tr><td><span class="badge badge-amber">${e.category}</span></td><td>${e.description}</td><td style="color:var(--red);font-weight:700">${fmt(e.amount)}</td></tr>`).join('')}</tbody></table></div>`}</div>
   </div>
   </div>`;
@@ -2242,13 +2265,13 @@ async function saveSettings(){
 
 function exportExcel(){
   const rows=[['iVault Report — '+new Date().toLocaleDateString()],[],['SALES INVOICES'],['Invoice','Customer','Date','Total','Profit']];
-  D.bills.forEach(b=>rows.push([b.id,b.customer_name,b.date,b.total,b.profit]));
+  D.bills.forEach(b=>rows.push([b.id,b.customer_name,b.date,b.total,billLiveProfit(b)]));
   rows.push([],['INVENTORY'],['Device','Serial','IMEI','Color','Storage','Cost','Status']);
   D.inventory.forEach(i=>rows.push([i.device_name,i.serial||'',i.imei||'',i.color||'',i.storage||'',i.cost_price,i.status]));
   rows.push([],['EXPENSES'],['Date','Category','Description','Amount']);
   D.expenses.forEach(e=>rows.push([e.date,e.category,e.description,e.amount]));
   const rev=D.bills.reduce((a,b)=>a+Number(b.total),0);
-  const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
+  const prof=D.bills.reduce((a,b)=>a+billLiveProfit(b),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   rows.push([],['SUMMARY'],['Total Revenue',rev],['Gross Profit',prof],['Total Expenses',exp],['Net Profit',prof-exp]);
   dl('\ufeff'+rows.map(r=>r.map(c=>JSON.stringify(c??'')).join(',')).join('\n'),'text/csv',`iVault_Report_${today()}.csv`);
@@ -2257,14 +2280,14 @@ function exportExcel(){
 function exportPDF(){
   const s=D.settings||{};
   const rev=D.bills.reduce((a,b)=>a+Number(b.total),0);
-  const prof=D.bills.reduce((a,b)=>a+Number(b.profit),0);
+  const prof=D.bills.reduce((a,b)=>a+billLiveProfit(b),0);
   const exp=D.expenses.reduce((a,e)=>a+Number(e.amount),0);
   const net=prof-exp;
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>iVault Report</title><style>body{font-family:sans-serif;padding:28px;max-width:750px;margin:auto;color:#111}h1{color:#f97316}h2{font-size:14px;margin:18px 0 7px;border-bottom:2px solid #eee;padding-bottom:4px}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}th{background:#f5f5f5;text-align:left;padding:6px 7px;font-size:10px}td{padding:6px 7px;border-bottom:1px solid #f0f0f0}.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}.scard{background:#f9f9f9;border-radius:8px;padding:12px}.l{font-size:10px;color:#888}.v{font-size:18px;font-weight:800;margin-top:4px}.green{color:#16a34a}.red{color:#dc2626}</style></head><body>
   <h1>🔐 iVault — Business Report</h1><div style="font-size:11px;color:#888">${s.company_name||''} · ${new Date().toLocaleDateString()}</div>
   <h2>Summary</h2><div class="summary"><div class="scard"><div class="l">Revenue</div><div class="v green">Rs. ${rev.toLocaleString()}</div></div><div class="scard"><div class="l">Gross Profit</div><div class="v green">Rs. ${prof.toLocaleString()}</div></div><div class="scard"><div class="l">Expenses</div><div class="v red">Rs. ${exp.toLocaleString()}</div></div><div class="scard"><div class="l">Net Profit</div><div class="v ${net>=0?'green':'red'}">Rs. ${net.toLocaleString()}</div></div></div>
-  <h2>Sales</h2><table><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td>${b.id}</td><td>${b.customer_name}</td><td>${b.date}</td><td>Rs. ${Number(b.total).toLocaleString()}</td><td>Rs. ${Number(b.profit).toLocaleString()}</td></tr>`).join('')}</tbody></table>
+  <h2>Sales</h2><table><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${D.bills.map(b=>`<tr><td>${b.id}</td><td>${b.customer_name}</td><td>${b.date}</td><td>Rs. ${Number(b.total).toLocaleString()}</td><td>Rs. ${Number(billLiveProfit(b)).toLocaleString()}</td></tr>`).join('')}</tbody></table>
   <h2>Inventory</h2><table><thead><tr><th>Device</th><th>Serial</th><th>IMEI</th><th>Cost</th><th>Status</th></tr></thead><tbody>${D.inventory.map(i=>`<tr><td>${i.device_name}</td><td>${i.serial||'—'}</td><td>${i.imei||'—'}</td><td>Rs. ${Number(i.cost_price).toLocaleString()}</td><td>${i.status}</td></tr>`).join('')}</tbody></table>
   <script>window.print();setTimeout(()=>window.close(),2000);<\/script></body></html>`);
   w.document.close();
