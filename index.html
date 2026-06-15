@@ -64,8 +64,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .user-details{flex:1;min-width:0}
 .user-details .uname{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .user-details .uemail{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.btn-logout{background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:4px;flex-shrink:0}
-.btn-logout:hover{color:var(--red)}
+.btn-logout{display:flex;align-items:center;justify-content:center;gap:7px;margin:0 12px 14px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;cursor:pointer;color:var(--text2);font-size:13px;font-weight:700;transition:all .15s}
+.btn-logout:hover{background:var(--red-bg);border-color:rgba(239,68,68,0.3);color:var(--red)}
 .hamburger{display:none;position:fixed;top:13px;left:13px;z-index:200;background:var(--orange);border:none;border-radius:9px;padding:9px 11px;color:#fff;font-size:17px;cursor:pointer}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99}
 .main{flex:1;overflow-y:auto;min-width:0;background:var(--bg)}
@@ -248,8 +248,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="uname" id="sidebarName">—</div>
         <div class="uemail" id="sidebarEmail">—</div>
       </div>
-      <button class="btn-logout" onclick="doLogout()" title="Logout">⏻</button>
     </div>
+    <button class="btn-logout" onclick="doLogout()">
+      <span style="font-size:15px">⏻</span> Logout
+    </button>
   </div>
   <div class="main" id="main"><div style="text-align:center;padding:60px;color:var(--text3);font-size:14px;font-weight:600">Loading iVault...</div></div>
 </div>
@@ -404,6 +406,37 @@ async function loadAll(){
 const fmt=n=>'Rs. '+Number(n||0).toLocaleString();
 const fmtK=n=>{const v=Number(n||0);return v>=1000000?'Rs. '+(v/1000000).toFixed(1)+'M':v>=1000?'Rs. '+(v/1000).toFixed(0)+'K':'Rs. '+v.toLocaleString();};
 const today=()=>new Date().toISOString().split('T')[0];
+// Build full device label: model · color · storage&status · condition
+function devLabel(i){
+  const name=i.device_name||i.name||'—';
+  const extras=[i.color,i.storage,i.condition].filter(Boolean).join(' · ');
+  return extras?`${name} · ${extras}`:name;
+}
+// Returns array of bank objects {name,title,acc,iban}. Reads new 'banks' JSON; falls back to legacy bank1/bank2 fields.
+function getBanks(s){
+  s=s||D.settings||{};
+  if(s.banks){
+    try{const arr=typeof s.banks==='string'?JSON.parse(s.banks):s.banks;if(Array.isArray(arr)&&arr.length)return arr;}catch(e){}
+  }
+  const legacy=[];
+  if(s.bank1_name||s.bank1_acc)legacy.push({name:s.bank1_name||'',title:s.bank1_title||'',acc:s.bank1_acc||'',iban:''});
+  if(s.bank2_name||s.bank2_acc)legacy.push({name:s.bank2_name||'',title:s.bank2_title||'',acc:s.bank2_acc||'',iban:''});
+  return legacy;
+}
+// Bank table HTML for invoices (4 columns: Bank / Holder / Acc No / IBAN)
+function bankTableHTML(){
+  const banks=getBanks();
+  if(!banks.length)return'<div style="font-size:11px;color:#888">No bank accounts added.</div>';
+  return`<table style="width:100%;border-collapse:collapse;margin-top:4px">
+    <thead><tr style="border-bottom:1px solid #ddd">
+      <th style="text-align:left;padding:3px 6px;font-size:9px;text-transform:uppercase;color:#666">Bank</th>
+      <th style="text-align:left;padding:3px 6px;font-size:9px;text-transform:uppercase;color:#666">Account Holder</th>
+      <th style="text-align:left;padding:3px 6px;font-size:9px;text-transform:uppercase;color:#666">Account No</th>
+      <th style="text-align:left;padding:3px 6px;font-size:9px;text-transform:uppercase;color:#666">IBAN</th>
+    </tr></thead>
+    <tbody>${banks.map(b=>`<tr><td style="padding:4px 6px;font-weight:700">${b.name||'—'}</td><td style="padding:4px 6px">${b.title||'—'}</td><td style="padding:4px 6px;font-weight:700">${b.acc||'—'}</td><td style="padding:4px 6px;font-size:10px">${b.iban||'—'}</td></tr>`).join('')}</tbody>
+  </table>`;
+}
 const dl=(content,type,filename)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=filename;a.click();};
 
 function renderNav(){
@@ -413,6 +446,43 @@ function setTab(t){ST.tab=t;ST.search='';renderNav();renderMain();document.getEl
 function renderMain(){
   const pages={dashboard:rDash,devices:rDevices,stock:rStock,inventory:rInventory,people:rPeople,billing:rBilling,expenses:rExpenses,repairs:rRepairs,reports:rReports,ledger:rLedger,backup:rBackup,settings:rSettings};
   document.getElementById('main').innerHTML=(pages[ST.tab]||rDash)();
+  // Post-render hooks
+  if(ST.tab==='settings'&&(ST.settingsTab||'company')==='company'){
+    _bankRows=getBanks().map(b=>({...b}));
+    if(_bankRows.length===0)_bankRows=[{name:'',title:'',acc:'',iban:''}];
+    renderBankRows();
+  }
+}
+
+// ---- BANK EDITOR (settings) ----
+let _bankRows=[];
+function renderBankRows(){
+  const wrap=document.getElementById('banksWrap');if(!wrap)return;
+  wrap.innerHTML=_bankRows.map((b,i)=>`
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:800;color:var(--orange)">BANK ${i+1}</div>
+        ${_bankRows.length>1?`<button onclick="removeBankRow(${i})" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700">✕ Remove</button>`:''}
+      </div>
+      <div class="mfield"><label>BANK NAME</label><input value="${b.name||''}" oninput="_bankRows[${i}].name=this.value" placeholder="e.g. HBL, Meezan Bank"></div>
+      <div class="mfield"><label>ACCOUNT HOLDER NAME</label><input value="${b.title||''}" oninput="_bankRows[${i}].title=this.value" placeholder="Account title"></div>
+      <div class="tf">
+        <div class="mfield"><label>ACCOUNT NUMBER</label><input value="${b.acc||''}" oninput="_bankRows[${i}].acc=this.value" placeholder="Account no."></div>
+        <div class="mfield"><label>IBAN</label><input value="${b.iban||''}" oninput="_bankRows[${i}].iban=this.value" placeholder="PK00XXXX0000000000000000"></div>
+      </div>
+    </div>`).join('');
+  const btn=document.getElementById('addBankBtn');
+  if(btn)btn.style.display=_bankRows.length>=5?'none':'inline-block';
+}
+function addBankRow(){
+  if(_bankRows.length>=5)return;
+  _bankRows.push({name:'',title:'',acc:'',iban:''});
+  renderBankRows();
+}
+function removeBankRow(i){
+  _bankRows.splice(i,1);
+  if(_bankRows.length===0)_bankRows=[{name:'',title:'',acc:'',iban:''}];
+  renderBankRows();
 }
 
 // DASHBOARD
@@ -869,7 +939,13 @@ function rLedger(){
 function renderLedgerList(){
   const isC=ST.ledgerTab!=='suppliers';
   const list=isC?D.customers:D.suppliers;
-  const filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  let filtered=list.filter(x=>(x.name||'').toLowerCase().includes(ST.search.toLowerCase()));
+  // Sort: outstanding balances on top (largest first), cleared/overpaid after
+  filtered=[...filtered].sort((a,b)=>{
+    const ba=(isC?custBalanceOf(a):suppBalanceOf(a)).balance;
+    const bb=(isC?custBalanceOf(b):suppBalanceOf(b)).balance;
+    return bb-ba;
+  });
   if(filtered.length===0)return`<div class="empty">No ${isC?'customers':'suppliers'} found</div>`;
   return filtered.map(x=>{
       const bal=isC?custBalanceOf(x):suppBalanceOf(x);
@@ -1188,8 +1264,10 @@ function rSettings(){
     <div class="tf">${[['Company Name','company_name'],['Address','address'],['Phone','phone'],['Email','email']].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>
   </div>
   <div class="card"><div class="card-title">Bank Accounts</div>
-    <div class="two-col">${[1,2].map(n=>`<div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)"><div style="font-size:12px;font-weight:800;color:var(--orange);margin-bottom:10px">BANK ${n}</div>${[['Bank Name',`bank${n}_name`],['Account No.',`bank${n}_acc`],['Account Title',`bank${n}_title`]].map(([l,f])=>`<div class="mfield"><label>${l}</label><input id="s_${f}" value="${s[f]||''}"></div>`).join('')}</div>`).join('')}</div>
-    <button class="btn-orange" style="margin-top:14px" onclick="saveSettings()">✓ Save Settings</button>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;font-weight:500">Add up to 5 bank accounts. These appear on every invoice.</p>
+    <div id="banksWrap"></div>
+    <button id="addBankBtn" onclick="addBankRow()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:12px;font-weight:700">+ Add Bank Account</button>
+    <div><button class="btn-orange" onclick="saveSettings()">✓ Save Settings</button></div>
   </div>`:tab==='terms'?`
   <div class="card"><div class="card-title">📋 Terms & Conditions on Bills</div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:14px;font-weight:500">These terms auto-appear on every printed invoice. Saved to your account — never disappears.</p>
@@ -1310,7 +1388,7 @@ function refreshStockUnits(){
         </select></div>
         <div class="mfield"><label>COST PRICE (RS.)</label><input type="number" value="${u.cost}" oninput="stockUnits[${i}].cost=this.value" placeholder="Cost..."></div>
         <div class="mfield"><label>COLOR</label><input value="${u.color}" oninput="stockUnits[${i}].color=this.value" placeholder="e.g. Black"></div>
-        <div class="mfield"><label>STORAGE</label><input value="${u.storage}" oninput="stockUnits[${i}].storage=this.value" placeholder="e.g. 256GB"></div>
+        <div class="mfield"><label>STORAGE & STATUS</label><input value="${u.storage}" oninput="stockUnits[${i}].storage=this.value" placeholder="e.g. 256GB PTA / JV"></div>
         <div class="mfield"><label>SERIAL NUMBER</label><input value="${u.serial}" oninput="stockUnits[${i}].serial=this.value" placeholder="SN..."></div>
         <div class="mfield"><label>IMEI</label><input value="${u.imei}" oninput="stockUnits[${i}].imei=this.value" placeholder="IMEI..."></div>
       </div>
@@ -1467,7 +1545,7 @@ function searchInventory(idx,query){
 }
 function selectInventoryItem(idx,invId){
   const inv=D.inventory.find(i=>i.id===invId);if(!inv)return;
-  billItems[idx]={...billItems[idx],inv_id:invId,device_name:inv.device_name,serial:inv.serial||'',imei:inv.imei||'',cost_price:inv.cost_price,search:`${inv.device_name} ${inv.serial||''} ${inv.imei||''}`};
+  billItems[idx]={...billItems[idx],inv_id:invId,device_name:inv.device_name,color:inv.color||'',storage:inv.storage||'',condition:inv.condition||'',serial:inv.serial||'',imei:inv.imei||'',cost_price:inv.cost_price,search:`${inv.device_name} ${inv.serial||''} ${inv.imei||''}`};
   const el=document.getElementById(`bi_suggest_${idx}`);if(el)el.style.display='none';
   refreshBillItems();
   setTimeout(()=>{const p=document.getElementById(`bi_price_${idx}`);if(p)p.value=billItems[idx].sale_price||'';},30);
@@ -1545,7 +1623,7 @@ function showBillDetail(id){
     </div>
     <div class="tbl-wrap"><table class="tbl" style="margin-bottom:12px">
       <thead><tr><th>Device</th><th>Serial / IMEI</th><th>Price</th></tr></thead>
-      <tbody>${items.map(i=>`<tr><td style="font-weight:700">${i.device_name||i.name||'—'}</td><td style="font-size:11px;color:var(--text3)">${i.serial?'SN:'+i.serial:''}${i.imei?' IMEI:'+i.imei:''}</td><td style="font-weight:800;color:var(--green)">${fmt(i.sale_price||i.price)}</td></tr>`).join('')}</tbody>
+      <tbody>${items.map(i=>`<tr><td style="font-weight:700">${devLabel(i)}</td><td style="font-size:11px;color:var(--text3)">${i.serial?'SN:'+i.serial:''}${i.imei?' IMEI:'+i.imei:''}</td><td style="font-weight:800;color:var(--green)">${fmt(i.sale_price||i.price)}</td></tr>`).join('')}</tbody>
     </table></div>
     <div style="text-align:right;font-size:18px;font-weight:800;color:var(--green);margin-bottom:6px">Total: ${fmt(b.total)}</div>
     ${paid>0?`<div style="text-align:right;font-size:13px;margin-bottom:4px;color:var(--text2)">Paid: <b style="color:var(--green)">${fmt(paid)}</b></div><div style="text-align:right;font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">Balance: ${fmt(bal)}</div>`:''}
@@ -1553,8 +1631,7 @@ function showBillDetail(id){
     ${b.notes?`<div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px;font-weight:500;border:1px solid var(--border)"><b>Notes:</b> ${b.notes}</div>`:''}
     <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text3);margin-bottom:14px;border:1px solid var(--border)">
       <div style="font-weight:700;color:var(--text2);margin-bottom:6px">Bank Details</div>
-      <div>${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}</div>
-      <div style="margin-top:4px">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+      ${getBanks(s).map(bk=>`<div style="margin-top:4px">${bk.name||'Bank'}: <b>${bk.acc||'—'}</b> — ${bk.title||''}${bk.iban?`<br><span style="font-size:11px">IBAN: ${bk.iban}</span>`:''}</div>`).join('')||'<div>No banks added</div>'}
     </div>
     <div class="mbtns">
       <button class="bsave" onclick="this.closest('.modal-ov').remove();previewBill('${b.id}')">👁 Preview & Print</button>
@@ -1569,8 +1646,9 @@ function showBillDetail(id){
 function waBill(id){
   const b=D.bills.find(x=>x.id===id);if(!b)return;
   const s=D.settings||{};
-  const items=(b.items||[]).map(i=>`• ${i.device_name||i.name||'Item'}${i.serial?' (SN:'+i.serial+')':''} — Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}`).join('\n');
-  const msg=`🔐 *${s.company_name||'iVault'}*\n\n📋 *Invoice: ${b.id}*\n📅 Date: ${b.date}\n👤 Customer: ${b.customer_name}\n\n*Items:*\n${items}\n\n💰 *Total: Rs. ${Number(b.total).toLocaleString()}*\n\n🏦 *Bank Details:*\n${s.bank1_name||'Bank 1'}: ${s.bank1_acc||'—'}\n${s.bank2_name||'Bank 2'}: ${s.bank2_acc||'—'}${b.notes?'\n\n📝 '+b.notes:''}`;
+  const items=(b.items||[]).map(i=>`• ${devLabel(i)}${i.serial?' (SN:'+i.serial+')':''} — Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}`).join('\n');
+  const bankLines=getBanks(s).map(bk=>`${bk.name||'Bank'}: ${bk.acc||'—'}${bk.iban?' (IBAN: '+bk.iban+')':''}`).join('\n');
+  const msg=`🔐 *${s.company_name||'iVault'}*\n\n📋 *Invoice: ${b.id}*\n📅 Date: ${b.date}\n👤 Customer: ${b.customer_name}\n\n*Items:*\n${items}\n\n💰 *Total: Rs. ${Number(b.total).toLocaleString()}*\n\n🏦 *Bank Details:*\n${bankLines}${b.notes?'\n\n📝 '+b.notes:''}`;
   const phone=(b.customer_phone||'').replace(/[^0-9]/g,'');
   window.open(phone?`https://wa.me/92${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
 }
@@ -1610,7 +1688,7 @@ function previewBill(id){
           <th style="text-align:left;padding:6px 4px;font-size:10px;font-weight:700;text-transform:uppercase">IMEI</th>
           <th style="text-align:right;padding:6px 4px;font-size:10px;font-weight:700;text-transform:uppercase">Price</th>
         </tr></thead>
-        <tbody>${items.map(i=>`<tr style="border-bottom:1px solid #eee"><td style="padding:7px 4px;font-weight:700">${i.device_name||i.name||'—'}</td><td style="padding:7px 4px;color:#444">${i.serial||'—'}</td><td style="padding:7px 4px;color:#444">${i.imei||'—'}</td><td style="padding:7px 4px;font-weight:800;text-align:right">Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td></tr>`).join('')}</tbody>
+        <tbody>${items.map(i=>`<tr style="border-bottom:1px solid #eee"><td style="padding:7px 4px;font-weight:700">${devLabel(i)}</td><td style="padding:7px 4px;color:#444">${i.serial||'—'}</td><td style="padding:7px 4px;color:#444">${i.imei||'—'}</td><td style="padding:7px 4px;font-weight:800;text-align:right">Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td></tr>`).join('')}</tbody>
       </table>
       <!-- 4. Totals -->
       <div style="border-top:1.5px solid #111;padding-top:8px;margin-top:2px;text-align:right">
@@ -1623,8 +1701,7 @@ function previewBill(id){
       <!-- 6. Bank details -->
       <div style="border-top:1px solid #ddd;margin-top:12px;padding-top:10px;font-size:11px">
         <div style="font-weight:800;margin-bottom:5px">Bank Details:</div>
-        <div>${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}</div>
-        <div style="margin-top:3px">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+        ${bankTableHTML()}
       </div>
       <!-- 7. Address & Contact -->
       <div style="border-top:1px solid #ddd;margin-top:12px;padding-top:8px;font-size:10px;color:#444;text-align:center">
@@ -1720,7 +1797,7 @@ function printBill(id){
     </tr></thead>
     <tbody>
     ${items.map(i=>`<tr>
-      <td><b>${i.device_name||i.name||'—'}</b>${isTherm&&i.serial?`<br><span style="font-size:8px;color:#555">SN:${i.serial}</span>`:''}${isTherm&&i.imei?`<br><span style="font-size:8px;color:#555">IMEI:${i.imei}</span>`:''}</td>
+      <td><b>${devLabel(i)}</b>${isTherm&&i.serial?`<br><span style="font-size:8px;color:#555">SN:${i.serial}</span>`:''}${isTherm&&i.imei?`<br><span style="font-size:8px;color:#555">IMEI:${i.imei}</span>`:''}</td>
       ${!isTherm?`<td style="color:#444">${i.serial||'—'}</td><td style="color:#444">${i.imei||'—'}</td>`:''}
       <td>Rs. ${Number(i.sale_price||i.price||0).toLocaleString()}</td>
     </tr>`).join('')}
@@ -1741,8 +1818,7 @@ function printBill(id){
   <!-- 6. Bank Details -->
   <div class="section">
     <div class="section-title">Bank Details:</div>
-    <div class="bank-line">${s.bank1_name||'Bank 1'}: <b>${s.bank1_acc||'—'}</b> — ${s.bank1_title||''}</div>
-    <div class="bank-line">${s.bank2_name||'Bank 2'}: <b>${s.bank2_acc||'—'}</b> — ${s.bank2_title||''}</div>
+    ${bankTableHTML()}
   </div>
 
   <!-- 7. Contact & Address -->
@@ -1931,7 +2007,7 @@ function renderEditStockUnits(){
         </div>
         <div class="mfield"><label>COST PRICE (RS.)</label><input type="number" value="${u.cost_price||''}" oninput="window._editStockUnits[${i}].cost_price=Number(this.value)" placeholder="Cost..."></div>
         <div class="mfield"><label>COLOR</label><input value="${u.color||''}" oninput="window._editStockUnits[${i}].color=this.value" placeholder="e.g. Black"></div>
-        <div class="mfield"><label>STORAGE</label><input value="${u.storage||''}" oninput="window._editStockUnits[${i}].storage=this.value" placeholder="e.g. 256GB"></div>
+        <div class="mfield"><label>STORAGE & STATUS</label><input value="${u.storage||''}" oninput="window._editStockUnits[${i}].storage=this.value" placeholder="e.g. 256GB PTA / JV"></div>
         <div class="mfield"><label>SERIAL NUMBER</label><input value="${u.serial||''}" oninput="window._editStockUnits[${i}].serial=this.value" placeholder="SN..."></div>
         <div class="mfield"><label>IMEI</label><input value="${u.imei||''}" oninput="window._editStockUnits[${i}].imei=this.value" placeholder="IMEI..."></div>
       </div>
@@ -2140,10 +2216,27 @@ async function delRow(table,id){
 
 async function saveSettings(){
   const g=id=>document.getElementById(id)?.value||'';const uid=CU.id;
-  const data={company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),bank1_name:g('s_bank1_name'),bank1_acc:g('s_bank1_acc'),bank1_title:g('s_bank1_title'),bank2_name:g('s_bank2_name'),bank2_acc:g('s_bank2_acc'),bank2_title:g('s_bank2_title'),terms:D.settings?.terms||''};
+  // Collect bank rows (only non-empty), store as JSON
+  const banks=(_bankRows||[]).filter(b=>b.name||b.acc||b.title||b.iban).map(b=>({name:b.name||'',title:b.title||'',acc:b.acc||'',iban:b.iban||''}));
+  // keep legacy bank1/bank2 in sync (first two) for backward compatibility
+  const b1=banks[0]||{},b2=banks[1]||{};
+  const data={
+    company_name:g('s_company_name'),address:g('s_address'),phone:g('s_phone'),email:g('s_email'),
+    banks:JSON.stringify(banks),
+    bank1_name:b1.name||'',bank1_acc:b1.acc||'',bank1_title:b1.title||'',
+    bank2_name:b2.name||'',bank2_acc:b2.acc||'',bank2_title:b2.title||'',
+    terms:D.settings?.terms||''
+  };
   const exists=await api('GET','settings',null,`user_id=eq.${uid}`);
-  const res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
-  if(!res)return alert('Save failed');
+  let res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
+  if(res===null){
+    // Fallback: 'banks' column may not exist yet — save without it
+    delete data.banks;
+    res=exists&&exists.length>0?await api('PATCH','settings',data,`user_id=eq.${uid}`):await api('POST','settings',{...data,user_id:uid});
+    if(res===null)return alert('Save failed. Please try again.');
+    alert('Settings saved (legacy mode — run the banks SQL to enable 5 banks + IBAN).');
+    await loadAll();return;
+  }
   await loadAll();alert('Settings saved ✓');
 }
 
