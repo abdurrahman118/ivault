@@ -4,10 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>iVault — Device Shop Manager</title>
-<!-- Add Font Awesome for professional icons -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<!-- Add html2pdf for WhatsApp PDF fix -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root{
   --bg:#0b0d14;--bg2:#13161f;--bg3:#1a1d28;--bg4:#21253a;
@@ -81,13 +77,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .lp-h2{text-align:center;font-size:clamp(28px,4.5vw,42px);font-weight:800;color:#fff;letter-spacing:-1px;margin-bottom:14px}
 .lp-sub{text-align:center;font-size:16px;color:#9aa1ad;max-width:560px;margin:0 auto 50px;line-height:1.6;font-weight:500}
 .lp-features{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.lp-feat{background:rgba(20,23,31,0.6);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:28px;opacity:0;transform:translateY(30px) scale(0.98);transition:transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease, border-color 0.35s, background 0.35s;position:relative;overflow:hidden}
+.lp-feat{background:rgba(20,23,31,0.6);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:28px;transition:transform .35s cubic-bezier(.4,0,.2,1),border-color .35s,background .35s;opacity:0;transform:translateY(24px);position:relative;overflow:hidden}
 .lp-feat.in{opacity:1;transform:translateY(0)}
 .lp-feat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--fc,#fb923c),transparent);opacity:0;transition:opacity .35s}
 .lp-feat:hover{transform:translateY(-6px);border-color:rgba(255,255,255,0.14);background:rgba(28,31,40,0.7)}
 .lp-feat:hover::after{opacity:.8}
 .lp-feat:hover .lp-feat-ic{transform:scale(1.08) rotate(-4deg)}
-.lp-feat-ic{width:52px;height:52px;border-radius:14px;background:var(--fcbg,rgba(251,146,60,0.12));display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:18px;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.lp-feat-ic{
+  width:56px;height:56px;border-radius:16px;
+  background:rgba(255,255,255,0.06);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 8px 24px rgba(0,0,0,0.25), inset 0 1px 1px rgba(255,255,255,0.1);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin-bottom:20px;
+  color:#fff;
+  transition:all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.lp-feat:hover .lp-feat-ic{
+  transform:translateY(-6px) scale(1.08);
+  background:var(--fcbg, rgba(251,146,60,0.15));
+  border-color:var(--fc, #fb923c);
+  box-shadow:0 14px 30px rgba(0,0,0,0.35), 0 0 20px var(--fcbg, rgba(251,146,60,0.2));
+  color:var(--fc, #fb923c);
+}
 .lp-feat h3{font-size:18px;font-weight:800;color:#fff;margin-bottom:9px;letter-spacing:-.3px}
 .lp-feat p{font-size:14px;color:#9aa1ad;line-height:1.65;font-weight:500}
 .lp-pricing{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:760px;margin:0 auto}
@@ -168,7 +181,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nb{width:100%;padding:10px 12px;border:none;background:none;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);text-align:left;border-radius:10px;transition:all .15s;font-weight:500;margin-bottom:2px}
 .nb:hover{color:var(--text);background:var(--bg3)}
 .nb.active{color:var(--orange);background:var(--orange-bg);font-weight:700}
-.nb .nav-icon{font-size:16px;width:20px;text-align:center}
+.nb .nav-icon{
+  width:36px;height:36px;border-radius:10px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.05);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:15px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.15);
+  transition:all 0.2s ease;
+}
+.nb:hover .nav-icon{
+  transform:translateY(-2px) scale(1.05);
+  background:var(--bg3);
+  border-color:var(--border2);
+  box-shadow:0 6px 14px rgba(0,0,0,0.3);
+}
+.nb.active .nav-icon{
+  background:var(--orange-bg);
+  border-color:rgba(249,115,22,0.3);
+  color:var(--orange);
+  box-shadow:0 4px 12px rgba(249,115,22,0.2), inset 0 1px 1px rgba(255,255,255,0.1);
+  transform:scale(1.05);
+}
 .user-area{margin:10px 12px 8px;padding:12px;border-top:none;border-radius:14px;background:linear-gradient(135deg,rgba(251,146,60,0.1),rgba(255,255,255,0.02));border:1px solid rgba(251,146,60,0.18);display:flex;align-items:center;gap:11px}
 .user-avatar{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#fb923c,#ea580c);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(234,88,12,0.3)}
 .user-details{flex:1;min-width:0}
@@ -386,17 +421,17 @@ body.light .df-btn{color:#666}body.light .df-btn.active{color:#fff}
       </div>
     </section>
 
-     <section class="lp-section" id="lpFeatures">
+    <section class="lp-section" id="lpFeatures">
       <div class="lp-eyebrow">Everything you need</div>
       <h2 class="lp-h2">One app for the whole shop</h2>
       <p class="lp-sub">From the first purchase to the final invoice, iVault keeps every part of your business organized and within reach.</p>
       <div class="lp-features">
-        <div class="lp-feat" style="--fc:#fb923c;--fcbg:rgba(251,146,60,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-file-invoice-dollar"></i></div><h3>Smart Billing</h3><p>Create professional invoices in seconds, with IMEI, serial, and full device details. Print or share on WhatsApp instantly.</p></div>
-        <div class="lp-feat" style="--fc:#3b82f6;--fcbg:rgba(59,130,246,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-boxes-stacked"></i></div><h3>Live Inventory</h3><p>Track every unit by IMEI and serial. Know exactly what is available, what is sold, and your total stock value at a glance.</p></div>
-        <div class="lp-feat" style="--fc:#22c55e;--fcbg:rgba(34,197,94,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-book-open"></i></div><h3>Customer Ledgers</h3><p>Never lose track of who owes you. Customer and supplier balances update automatically with every sale and payment.</p></div>
-        <div class="lp-feat" style="--fc:#a855f7;--fcbg:rgba(168,85,247,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-truck-ramp-box"></i></div><h3>Stock Purchases</h3><p>Record supplier purchases with full unit details and payment status. Everything flows straight into your inventory.</p></div>
-        <div class="lp-feat" style="--fc:#ec4899;--fcbg:rgba(236,72,153,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-chart-line"></i></div><h3>Reports & Profit</h3><p>See real time revenue, profit, and expenses. Export clean reports whenever you need them.</p></div>
-        <div class="lp-feat" style="--fc:#06b6d4;--fcbg:rgba(6,182,212,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-screwdriver-wrench"></i></div><h3>Repairs Tracking</h3><p>Log repair jobs, track their status, and keep customers updated from drop off to delivery.</p></div>
+        <div class="lp-feat" style="--fc:#fb923c;--fcbg:rgba(251,146,60,0.12)"><div class="lp-feat-ic">🧾</div><h3>Smart Billing</h3><p>Create professional invoices in seconds, with IMEI, serial, and full device details. Print or share on WhatsApp instantly.</p></div>
+        <div class="lp-feat" style="--fc:#3b82f6;--fcbg:rgba(59,130,246,0.12)"><div class="lp-feat-ic">🗃️</div><h3>Live Inventory</h3><p>Track every unit by IMEI and serial. Know exactly what is available, what is sold, and your total stock value at a glance.</p></div>
+        <div class="lp-feat" style="--fc:#22c55e;--fcbg:rgba(34,197,94,0.12)"><div class="lp-feat-ic">📒</div><h3>Customer Ledgers</h3><p>Never lose track of who owes you. Customer and supplier balances update automatically with every sale and payment.</p></div>
+        <div class="lp-feat" style="--fc:#a855f7;--fcbg:rgba(168,85,247,0.12)"><div class="lp-feat-ic">🚚</div><h3>Stock Purchases</h3><p>Record supplier purchases with full unit details and payment status. Everything flows straight into your inventory.</p></div>
+        <div class="lp-feat" style="--fc:#ec4899;--fcbg:rgba(236,72,153,0.12)"><div class="lp-feat-ic">📊</div><h3>Reports & Profit</h3><p>See real time revenue, profit, and expenses. Export clean reports whenever you need them.</p></div>
+        <div class="lp-feat" style="--fc:#06b6d4;--fcbg:rgba(6,182,212,0.12)"><div class="lp-feat-ic">🔧</div><h3>Repairs Tracking</h3><p>Log repair jobs, track their status, and keep customers updated from drop off to delivery.</p></div>
       </div>
     </section>
 
@@ -405,9 +440,9 @@ body.light .df-btn{color:#666}body.light .df-btn.active{color:#fff}
       <h2 class="lp-h2">Built for how you actually work</h2>
       <p class="lp-sub">Made for mobile and device shop owners who want power without the complexity.</p>
       <div class="lp-features">
-        <div class="lp-feat" style="--fc:#fbbf24;--fcbg:rgba(251,191,36,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-bolt"></i></div><h3>Fast and simple</h3><p>No training needed. If you can use WhatsApp, you can run your whole shop on iVault.</p></div>
-        <div class="lp-feat" style="--fc:#3b82f6;--fcbg:rgba(59,130,246,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-cloud"></i></div><h3>Safe in the cloud</h3><p>Your data is backed up securely and available wherever you log in, on phone or computer.</p></div>
-        <div class="lp-feat" style="--fc:#22c55e;--fcbg:rgba(34,197,94,0.12)"><div class="lp-feat-ic"><i class="fa-solid fa-shield-halved"></i></div><h3>Yours and private</h3><p>Each shop is fully separate and secure. Your numbers stay your numbers.</p></div>
+        <div class="lp-feat" style="--fc:#fbbf24;--fcbg:rgba(251,191,36,0.12)"><div class="lp-feat-ic">⚡</div><h3>Fast and simple</h3><p>No training needed. If you can use WhatsApp, you can run your whole shop on iVault.</p></div>
+        <div class="lp-feat" style="--fc:#3b82f6;--fcbg:rgba(59,130,246,0.12)"><div class="lp-feat-ic">☁️</div><h3>Safe in the cloud</h3><p>Your data is backed up securely and available wherever you log in, on phone or computer.</p></div>
+        <div class="lp-feat" style="--fc:#22c55e;--fcbg:rgba(34,197,94,0.12)"><div class="lp-feat-ic">🔒</div><h3>Yours and private</h3><p>Each shop is fully separate and secure. Your numbers stay your numbers.</p></div>
       </div>
     </section>
 
@@ -543,18 +578,18 @@ body.light .df-btn{color:#666}body.light .df-btn.active{color:#fff}
 const SUPA='https://yfjrrfbfxprrrdeynzez.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlmanJyZmJmeHBycnJkZXluemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MjU3NzUsImV4cCI6MjA5NDEwMTc3NX0.Dn4dgxZC2V3p6a-Ng4a8mk8h9J5cj17wUWagE1XFAUI';
 const NAV=[
-  {id:'dashboard',icon:'<i class="fa-solid fa-gauge"></i>',label:'Dashboard'},
-  {id:'devices',icon:'<i class="fa-solid fa-mobile-screen"></i>',label:'Device Catalog'},
-  {id:'stock',icon:'<i class="fa-solid fa-truck-ramp-box"></i>',label:'Stock Purchases'},
-  {id:'inventory',icon:'<i class="fa-solid fa-boxes-stacked"></i>',label:'Inventory'},
-  {id:'people',icon:'<i class="fa-solid fa-users"></i>',label:'People'},
-  {id:'billing',icon:'<i class="fa-solid fa-file-invoice-dollar"></i>',label:'Billing'},
-  {id:'expenses',icon:'<i class="fa-solid fa-money-bill-transfer"></i>',label:'Expenses'},
-  {id:'repairs',icon:'<i class="fa-solid fa-screwdriver-wrench"></i>',label:'Repairs'},
-  {id:'ledger',icon:'<i class="fa-solid fa-book-open"></i>',label:'Ledger'},
-  {id:'reports',icon:'<i class="fa-solid fa-chart-line"></i>',label:'Reports'},
-  {id:'backup',icon:'<i class="fa-solid fa-cloud"></i>',label:'Backup'},
-  {id:'settings',icon:'<i class="fa-solid fa-gear"></i>',label:'Settings'},
+  {id:'dashboard',icon:'⊞',label:'Dashboard'},
+  {id:'devices',icon:'📱',label:'Device Catalog'},
+  {id:'stock',icon:'🚚',label:'Stock Purchases'},
+  {id:'inventory',icon:'🗃️',label:'Inventory'},
+  {id:'people',icon:'👥',label:'People'},
+  {id:'billing',icon:'🧾',label:'Billing'},
+  {id:'expenses',icon:'💸',label:'Expenses'},
+  {id:'repairs',icon:'🔧',label:'Repairs'},
+  {id:'ledger',icon:'📒',label:'Ledger'},
+  {id:'reports',icon:'📊',label:'Reports'},
+  {id:'backup',icon:'☁️',label:'Backup'},
+  {id:'settings',icon:'⚙️',label:'Settings'},
 ];
 const AVATAR_COLORS=['#f97316','#8b5cf6','#3b82f6','#22c55e','#ef4444','#f59e0b'];
 function avatarColor(name){let h=0;for(let c of(name||''))h=c.charCodeAt(0)+((h<<5)-h);return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length];}
@@ -642,107 +677,7 @@ function switchAuth(m){
 }
 function setMsg(msg,type){const el=document.getElementById('authMsg');el.textContent=msg;el.className='auth-msg'+(type?' '+type:'');}
 function togglePw(id,btn){const inp=document.getElementById(id);if(!inp)return;if(inp.type==='password'){inp.type='text';btn.textContent='🙈';}else{inp.type='password';btn.textContent='👁';}}
-// =====================================================================
-// NEW FEATURES & FIXES ADDED
-// =====================================================================
 
-// 1. Smooth Animation Trigger for Landing Page
-document.addEventListener("DOMContentLoaded", () => {
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('in');
-      }
-    });
-  }, { threshold: 0.1 });
-  document.querySelectorAll('.lp-feat').forEach(feat => observer.observe(feat));
-});
-
-// FIX 1: Unique Stock Purchase Bill Number
-async function generateUniquePurchaseBillId() {
-  const existing = await api('GET', 'stockPurchases', null, null);
-  if (!existing || existing.length === 0) return 'PUR-1001';
-  let maxNum = 1000;
-  existing.forEach(p => {
-    const match = p.bill_no ? p.bill_no.match(/\d+/) : null;
-    if (match) {
-      const num = parseInt(match[0]);
-      if (num > maxNum) maxNum = num;
-    }
-  });
-  return `PUR-${maxNum + 1}`;
-}
-
-// FIX 2 & 3: Fully Editable Purchases & Invoices
-async function handleSupplierChange(billId, oldSupplierId, newSupplierId, amount) {
-  if (oldSupplierId === newSupplierId) return;
-  // Remove from old supplier ledger
-  await api('DELETE', 'supplierPayments', null, `bill_id=eq.${billId}`);
-  // Add to new supplier ledger
-  await api('POST', 'supplierPayments', {
-    supplier_id: newSupplierId,
-    bill_id: billId,
-    amount: amount,
-    type: 'purchase',
-    date: new Date().toISOString()
-  });
-}
-
-// FIX 4: WhatsApp PDF Fix
-async function shareOnWhatsApp(billId) {
-  const bill = D.bills.find(b => b.id === billId);
-  if (!bill) return alert("Invoice not found.");
-  
-  // Attempt to find the invoice element. Adjust ID if necessary.
-  const invoiceElement = document.getElementById(`invoice-print-area-${billId}`) || document.getElementById('billDetailModal');
-  if(!invoiceElement) return alert("Invoice element not found for PDF generation.");
-  
-  const opt = {
-    margin: 10,
-    filename: `Invoice_${bill.invoice_no}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-  
-  // Generate and auto-download the PDF
-  await html2pdf().set(opt).from(invoiceElement).save();
-  
-  // Open WhatsApp with text message
-  const text = `Hello ${bill.customer_name || 'Customer'}, here is your invoice ${bill.invoice_no}.`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-}
-
-// UPDATE 1: Duplicate IMEI Check
-async function checkDuplicateIMEI(imei) {
-  if (!imei || imei.length < 5) return false;
-  const existing = await api('GET', 'inventory', null, `imei=eq.${imei}`);
-  if (existing && existing.length > 0) {
-    alert(`Warning: IMEI/Serial ${imei} already exists in inventory!`);
-    return true;
-  }
-  return false;
-}
-
-// UPDATE 2: Report Filters Setup
-function setupReportFilters() {
-  const reportType = document.getElementById('rptType')?.value || 'all';
-  const dateRange = document.getElementById('rptRange')?.value || 'all';
-  let startDate = new Date();
-  if (dateRange === '1m') startDate.setMonth(startDate.getMonth() - 1);
-  if (dateRange === '3m') startDate.setMonth(startDate.getMonth() - 3);
-  if (dateRange === 'all') startDate = new Date(0); // beginning of time
-  return { reportType, startDate };
-}
-
-// UPDATE 3: Inventory List - Show Purchase Invoice Number
-function getPurchaseBillNo(purchaseId) {
-  if(!purchaseId) return 'N/A';
-  const purchase = D.stockPurchases.find(p => p.id === purchaseId);
-  return purchase ? purchase.bill_no : 'N/A';
-}
-
-// =====================================================================
 // Detect password-recovery link on page load.
 // Supabase may append tokens as a hash (#access_token=...&type=recovery)
 // OR as a query param (?type=recovery&access_token=... or ?code=...) depending
@@ -3218,15 +3153,27 @@ async function doWaShare(id){
   const s=D.settings||{};
   const status=document.getElementById('waStatus');
   if(status)status.textContent='Generating PDF...';
+  let cover=null,holder=null;
   try{
     await loadPdfLib();
     const html=buildInvoiceHTML(b,s,'A5');
-    const holder=document.createElement('div');
-    holder.style.cssText='position:fixed;left:-9999px;top:0;width:148mm;background:#fff';
+    // A white full-screen cover keeps the render area within the visible viewport
+    // (off-screen positions like left:-9999px render blank on iOS Safari), while
+    // hiding the actual invoice markup from the user during capture.
+    cover=document.createElement('div');
+    cover.style.cssText='position:fixed;inset:0;background:#fff;z-index:9998';
+    document.body.appendChild(cover);
+    holder=document.createElement('div');
+    holder.style.cssText='position:fixed;left:0;top:0;width:148mm;background:#fff;z-index:9999';
     holder.innerHTML=html;
     document.body.appendChild(holder);
-    await window.html2pdf().set({margin:6,filename:`Invoice_${b.id}.pdf`,image:{type:'jpeg',quality:0.95},html2canvas:{scale:2},jsPDF:{unit:'mm',format:'a5',orientation:'portrait'}}).from(holder).save();
-    holder.remove();
+    // Wait for any images (e.g. shop logo) to finish loading before capture,
+    // otherwise they can silently render as blank space.
+    const imgs=holder.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(img=>img.complete?Promise.resolve():new Promise(res=>{img.onload=res;img.onerror=res;})));
+    await new Promise(res=>setTimeout(res,150));
+    await window.html2pdf().set({margin:6,filename:`Invoice_${b.id}.pdf`,image:{type:'jpeg',quality:0.95},html2canvas:{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a5',orientation:'portrait'}}).from(holder).save();
+    holder.remove();cover.remove();holder=null;cover=null;
     if(status)status.textContent='PDF downloaded! Opening WhatsApp...';
     const phone=(b.customer_phone||'').replace(/[^0-9]/g,'');
     const msg=`*${s.company_name||'iVault'}*\n\nInvoice: ${b.id}\nDate: ${b.date}\nCustomer: ${b.customer_name}\nTotal: Rs. ${Number(b.total).toLocaleString()}\n\nYour invoice PDF is attached. Thank you!`;
@@ -3236,6 +3183,8 @@ async function doWaShare(id){
     },800);
   }catch(e){
     console.error('wa pdf',e);
+    if(holder)holder.remove();
+    if(cover)cover.remove();
     if(status)status.textContent='Could not generate PDF. Try the Print button instead.';
   }
 }
@@ -3466,38 +3415,12 @@ function showConfirm(msg,onYes){
 function openEditBillModal(id){
   if(!guardPerm('editBills','You are not allowed to edit bills.'))return;
   const b=D.bills.find(x=>x.id===id);if(!b)return;
-  // Pre-populate global state from existing bill
+  // load existing items into billItems
   billItems=(b.items||[]).map(i=>({...i,sale_price:i.sale_price||i.price||0,search:i.device_name||i.name||''}));
-  BILL_TYPE=b.bill_type||'Sale';
-  returnUnit=null;exchangeTradeIn=null;
-  // Parse exchange trade-in from notes if present
   const old=document.getElementById('modalWrap');if(old)old.remove();
   const div=document.createElement('div');div.id='modalWrap';
-  div.innerHTML=`<div class="modal-ov"><div class="modal" style="max-width:560px">
+  div.innerHTML=`<div class="modal-ov" ><div class="modal" style="max-width:560px">
     <h3>✏️ Edit Invoice — ${b.id}</h3>
-    <div style="display:flex;gap:6px;background:var(--bg3);border-radius:11px;padding:4px;margin-bottom:16px">
-      <button id="bt_Sale" class="billtype-btn${BILL_TYPE==='Sale'?' active':''}" onclick="setEditBillType('Sale','${b.id}')">🛒 Sale</button>
-      <button id="bt_Exchange" class="billtype-btn${BILL_TYPE==='Exchange'?' active':''}" onclick="setEditBillType('Exchange','${b.id}')">🔄 Exchange</button>
-      <button id="bt_Return" class="billtype-btn${BILL_TYPE==='Return'?' active':''}" onclick="setEditBillType('Return','${b.id}')">↩️ Return</button>
-    </div>
-    <div class="mfield"><label>DATE</label><input type="date" id="bill_edit_date" value="${b.date||today()}"></div>
-    <div id="editBillTypeBody"></div>
-    <div class="mbtns"><button class="bsave" onclick="saveEditBill('${b.id}')">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
-  </div></div>`;
-  document.body.appendChild(div);
-  renderEditBillBody(b);
-}
-
-function setEditBillType(type,id){
-  BILL_TYPE=type;
-  ['Sale','Exchange','Return'].forEach(t=>{const btn=document.getElementById('bt_'+t);if(btn)btn.classList.toggle('active',t===type);});
-  const b=D.bills.find(x=>x.id===id);
-  if(b)renderEditBillBody(b);
-}
-
-function renderEditBillBody(b){
-  const body=document.getElementById('editBillTypeBody');if(!body)return;
-  const custBlock=`
     <div class="tf">
       <div class="mfield"><label>CUSTOMER NAME</label>
         <div class="suggest-wrap">
@@ -3507,85 +3430,33 @@ function renderEditBillBody(b){
         </div>
       </div>
       <div class="mfield"><label>CUSTOMER PHONE</label><input id="bill_cust_phone" value="${b.customer_phone||''}"></div>
-    </div>`;
-  const notesBlock=`<div class="mfield"><label>EXTRA NOTES</label><textarea id="bill_notes" style="min-height:55px">${b.notes||''}</textarea></div>`;
-  const payBlock=`
+    </div>
+    <div class="mfield"><label>DATE</label><input type="date" id="bill_edit_date" value="${b.date||today()}"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:4px">Items — Search inventory by IMEI/Serial</div>
+    <div id="billItemsWrap"></div>
+    <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
+    <div class="mfield"><label>EXTRA NOTES</label><textarea id="bill_notes" style="min-height:60px">${b.notes||''}</textarea></div>
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;text-transform:uppercase">💰 Payment Status</div>
       <div class="mfield"><label>STATUS</label>
         <select id="bill_pay_status" onchange="togglePaymentFields()">
-          <option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid</option>
-          <option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial</option>
-          <option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared</option>
+          <option value="Unpaid"${(b.pay_status||'Unpaid')==='Unpaid'?' selected':''}>Unpaid — Full amount due</option>
+          <option value="Partial"${b.pay_status==='Partial'?' selected':''}>Partial — Customer paid some now</option>
+          <option value="Cleared"${b.pay_status==='Cleared'?' selected':''}>Cleared — Fully paid</option>
         </select>
       </div>
       <div id="partialPayFields" style="${b.pay_status==='Partial'?'':'display:none'}">
-        <div class="mfield"><label>AMOUNT PAID (RS.)</label><input type="number" id="bill_amount_paid" value="${b.amount_paid||0}" oninput="updateBillBalance()"></div>
+        <div class="mfield"><label>AMOUNT PAID NOW (RS.)</label><input type="number" id="bill_amount_paid" value="${b.amount_paid||0}" oninput="updateBillBalance()"></div>
         <div id="billBalanceRow" style="${Number(b.amount_paid)>0?'':'display:none'};background:var(--red-bg);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-top:6px">
           <div style="font-size:11px;color:var(--text3);font-weight:700">REMAINING BALANCE</div>
-          <div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red)">${fmt(Number(b.balance||0))}</div>
+          <div id="billBalanceAmt" style="font-size:18px;font-weight:800;color:var(--red);margin-top:2px">${fmt(Number(b.balance||0))}</div>
         </div>
       </div>
-    </div>`;
-
-  if(BILL_TYPE==='Sale'){
-    body.innerHTML=custBlock+`
-      <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:10px">Items</div>
-      <div id="billItemsWrap"></div>
-      <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
-      `+notesBlock+payBlock;
-    setTimeout(refreshBillItems,30);
-  } else if(BILL_TYPE==='Exchange'){
-    // Try to pull existing trade-in from notes
-    const noteLines=b.notes||'';
-    const tradeMatch=noteLines.match(/Trade-in: (.+?) valued Rs\. ([\d,]+)/);
-    const tradeDevice=tradeMatch?tradeMatch[1]:'';
-    const tradeVal=tradeMatch?tradeMatch[2].replace(/,/g,''):'';
-    body.innerHTML=custBlock+`
-      <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:800;color:#a855f7;text-transform:uppercase;margin-bottom:10px">🔄 Old Phone Taken In (Trade-in)</div>
-        <div class="mfield"><label>OLD DEVICE</label>
-          <select id="ex_device_sel" onchange="onExDeviceSelect(this.value)">
-            <option value="">Select from device catalog...</option>
-            ${D.devices.map(d=>`<option value="${(d.name||'').replace(/"/g,'&quot;')}"${tradeDevice===d.name?' selected':''}>${d.name} (${d.category})</option>`).join('')}
-            <option value="__other__"${tradeDevice&&!D.devices.find(d=>d.name===tradeDevice)?' selected':''}>Other (type manually)</option>
-          </select>
-          <input id="ex_device" placeholder="Type device name..." style="margin-top:8px;display:${tradeDevice&&!D.devices.find(d=>d.name===tradeDevice)?'block':'none'}" value="${tradeDevice&&!D.devices.find(d=>d.name===tradeDevice)?tradeDevice:''}">
-        </div>
-        <div class="tf">
-          <div class="mfield"><label>SERIAL</label><input id="ex_serial" placeholder="Serial number"></div>
-          <div class="mfield"><label>IMEI</label><input id="ex_imei" placeholder="IMEI"></div>
-        </div>
-        <div class="mfield"><label>TRADE-IN VALUE (RS.)</label><input type="number" id="ex_value" value="${tradeVal}" placeholder="Agreed value of old phone" oninput="updateExchangeTotal()"></div>
-      </div>
-      <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:10px">New Phone Sold</div>
-      <div id="billItemsWrap"></div>
-      <button onclick="addBillItem()" style="font-size:13px;color:var(--orange);background:none;border:none;cursor:pointer;margin-bottom:10px;font-weight:700">+ Add Item</button>
-      <div style="background:var(--bg3);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);font-weight:600"><span>New phone total</span><span id="ex_sale_total">Rs. 0</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:#a855f7;font-weight:600;margin-top:4px"><span>Less trade-in</span><span id="ex_tradein_disp">- Rs. 0</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:16px;color:var(--text);font-weight:800;margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span>Customer pays</span><span id="ex_difference">Rs. 0</span></div>
-      </div>
-      `+notesBlock+payBlock;
-    setTimeout(()=>{refreshBillItems();updateExchangeTotal();},30);
-  } else if(BILL_TYPE==='Return'){
-    const retPrice=b.total||0;
-    body.innerHTML=custBlock+`
-      <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;margin-bottom:10px">↩️ Return Details</div>
-        <div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:13px;color:var(--text2);font-weight:500;margin-bottom:10px">
-          ${(b.items||[]).map(i=>`<div><b>${i.device_name||''}</b>${i.serial?' · SN:'+i.serial:''}${i.imei?' · IMEI:'+i.imei:''}</div>`).join('') || 'No items'}
-        </div>
-        <div class="mfield"><label>RETURN / BUYBACK PRICE (RS.)</label><input type="number" id="ret_price" value="${retPrice}" placeholder="Enter buyback price..."></div>
-        <div class="mfield"><label>REFUND SETTLEMENT</label>
-          <select id="ret_settle">
-            <option value="cash">Cash now (does not affect ledger)</option>
-            <option value="ledger">Adjust ledger balance</option>
-          </select>
-        </div>
-      </div>
-      `+notesBlock;
-  }
+    </div>
+    <div class="mbtns"><button class="bsave" onclick="saveEditBill('${b.id}')">✓ Save Changes</button><button class="bcancel" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+  document.body.appendChild(div);
+  setTimeout(refreshBillItems,30);
 }
 async function saveEditBill(id){
   const b=D.bills.find(x=>x.id===id);if(!b)return;
@@ -3594,44 +3465,27 @@ async function saveEditBill(id){
   const custId=document.getElementById('bill_cust_id')?.value||b.customer_id||null;
   const date=document.getElementById('bill_edit_date')?.value||b.date;
   const notes=document.getElementById('bill_notes')?.value?.trim()||'';
-  const billType=BILL_TYPE||b.bill_type||'Sale';
-
-  // ===== RETURN EDIT =====
-  if(billType==='Return'){
-    const retPrice=Number(document.getElementById('ret_price')?.value||0);
-    if(retPrice<=0)return alert('Enter the return/buyback price');
-    const settle=document.getElementById('ret_settle')?.value||'cash';
-    const retItem=b.items&&b.items[0]?{...b.items[0],sale_price:retPrice}:{sale_price:retPrice};
-    const res=await api('PATCH','bills',{customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date,items:[retItem],total:retPrice,profit:0,notes,bill_type:'Return',pay_status:'Cleared',amount_paid:retPrice,balance:0},`id=eq.${id}`);
-    if(!res)return alert('Save failed. Try again.');
-    closeModal();await loadAll();renderMain();return;
-  }
-
-  // ===== SALE / EXCHANGE EDIT =====
+  const payStatus=document.getElementById('bill_pay_status')?.value||'Unpaid';
+  // Read current prices from DOM
   billItems.forEach((item,i)=>{const el=document.getElementById(`bi_price_${i}`);if(el)item.sale_price=Number(el.value)||0;});
   const validItems=billItems.filter(item=>Number(item.sale_price)>0);
   if(validItems.length===0)return alert('Add at least 1 item with a sale price');
-  const saleTotal=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
+  const total=validItems.reduce((a,i)=>a+Number(i.sale_price),0);
   const cost=validItems.reduce((a,i)=>a+Number(i.cost_price||0),0);
-  let total=saleTotal,billProfit=saleTotal-cost,fullNotes=notes,tradeInValue=0;
-  if(billType==='Exchange'){
-    const exDevice=document.getElementById('ex_device')?.value?.trim()||document.getElementById('ex_device_sel')?.value||'';
-    tradeInValue=Number(document.getElementById('ex_value')?.value||0);
-    total=Math.max(0,saleTotal-tradeInValue);
-    billProfit=saleTotal-cost;
-    fullNotes=`Trade-in: ${exDevice} valued Rs. ${tradeInValue.toLocaleString()}.${notes?' '+notes:''}`;
-  }
-  const payStatus=document.getElementById('bill_pay_status')?.value||'Unpaid';
   const amtPaid=payStatus==='Cleared'?total:payStatus==='Partial'?Number(document.getElementById('bill_amount_paid')?.value||0):0;
   const balance=total-amtPaid;
-  // Restore removed inventory items, mark new ones sold
+  // First restore previously sold items that are being removed
   const oldInvIds=(b.items||[]).map(i=>i.inv_id).filter(Boolean);
   const newInvIds=validItems.map(i=>i.inv_id).filter(Boolean);
-  for(const oldId of oldInvIds){if(!newInvIds.includes(oldId))await api('PATCH','inventory',{status:'Available',sold_invoice:null},`id=eq.${oldId}`);}
-  for(const item of validItems){if(item.inv_id&&!oldInvIds.includes(item.inv_id))await api('PATCH','inventory',{status:'Sold',sold_invoice:id},`id=eq.${item.inv_id}`);}
-  const res=await api('PATCH','bills',{customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date,items:validItems,total,profit:billProfit,notes:fullNotes,pay_status:payStatus,amount_paid:amtPaid,balance,bill_type:billType},`id=eq.${id}`);
+  for(const oldId of oldInvIds){
+    if(!newInvIds.includes(oldId)) await api('PATCH','inventory',{status:'Available',sold_invoice:null},`id=eq.${oldId}`);
+  }
+  // Mark new items as sold
+  for(const item of validItems){
+    if(item.inv_id&&!oldInvIds.includes(item.inv_id)) await api('PATCH','inventory',{status:'Sold',sold_invoice:id},`id=eq.${item.inv_id}`);
+  }
+  const res=await api('PATCH','bills',{customer_name:custName,customer_id:custId?Number(custId):null,customer_phone:custPhone,date,items:validItems,total,profit:total-cost,notes,pay_status:payStatus,amount_paid:amtPaid,balance},`id=eq.${id}`);
   if(!res)return alert('Save failed. Try again.');
-  logActivity('Edited bill',`${id} → ${billType}`);
   closeModal();await loadAll();renderMain();
 }
 
